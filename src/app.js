@@ -1364,9 +1364,10 @@
                     const intensity = maxVal > 0 ? v / maxVal : 0;
                     const bg = v > 0 ? `rgba(79,70,229,${0.08 + intensity * 0.72})` : 'transparent';
                     const fg = intensity > 0.5 ? 'white' : 'var(--gray-700)';
-                    html += `<td><span class="hm-cell" style="background:${bg};color:${fg}">${v || ''}</span></td>`;
+                    const tooltip = v > 0 ? `지원 건수(건): ${v}` : '지원 건수(건): 0';
+                    html += `<td><span class="hm-cell" style="background:${bg};color:${fg}" title="${tooltip}">${v || ''}</span></td>`;
                 });
-                html += `<td><strong>${rowSum}</strong></td></tr>`;
+                html += `<td><strong title="지원 건수(건): ${rowSum}">${rowSum}</strong></td></tr>`;
             });
             html += '</tbody></table>';
             return html;

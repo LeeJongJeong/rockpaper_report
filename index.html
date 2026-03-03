@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -315,15 +315,18 @@
                         <div class="chart-container xtall"><canvas id="chartEngProduct"></canvas></div>
                     </div>
                 </div>
-                <!-- ⑦ 히트맵 + ⑧ 스코어카드 -->
+                <!-- ⑦ 스코어카드 -->
+                <div class="chart-grid single">
+                    <div class="chart-card">
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 엔지니어 종합 스코어카드</div>
+                        <div style="overflow-x:auto;" id="engScorecard"></div>
+                    </div>
+                </div>
+                <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
                         <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 엔지니어 × 지원유형 히트맵</div>
                         <div class="heatmap-wrapper" id="engHeatmap"></div>
-                    </div>
-                    <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 엔지니어 종합 스코어카드</div>
-                        <div style="overflow-x:auto;" id="engScorecard"></div>
                     </div>
                 </div>
             </div>
@@ -369,15 +372,18 @@
                         <div class="chart-container tall"><canvas id="chartProdDaily"></canvas></div>
                     </div>
                 </div>
-                <!-- ⑦ 히트맵 + ⑧ 스코어카드 -->
+                <!-- ⑦ 스코어카드 -->
+                <div class="chart-grid single">
+                    <div class="chart-card">
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 제품별 상세 현황</div>
+                        <div style="overflow-x:auto;" id="prodScorecard"></div>
+                    </div>
+                </div>
+                <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
                         <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 제품 × 엔지니어 커버리지</div>
                         <div class="heatmap-wrapper" id="prodHeatmap"></div>
-                    </div>
-                    <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 제품별 상세 현황</div>
-                        <div style="overflow-x:auto;" id="prodScorecard"></div>
                     </div>
                 </div>
             </div>
@@ -421,15 +427,18 @@
                         <div class="chart-container tall"><canvas id="chartTypeEngCount"></canvas></div>
                     </div>
                 </div>
-                <!-- ⑦ 히트맵 + ⑧ 스코어카드 -->
+                <!-- ⑦ 스코어카드 -->
+                <div class="chart-grid single">
+                    <div class="chart-card">
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 지원유형 상세 현황</div>
+                        <div style="overflow-x:auto;" id="typeScorecard"></div>
+                    </div>
+                </div>
+                <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
                         <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 지원유형 × 제품 히트맵</div>
                         <div class="heatmap-wrapper" id="typeHeatmap"></div>
-                    </div>
-                    <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 지원유형 상세 현황</div>
-                        <div style="overflow-x:auto;" id="typeScorecard"></div>
                     </div>
                 </div>
             </div>
@@ -468,16 +477,12 @@
                         <div class="chart-container tall"><canvas id="chartCustSales"></canvas></div>
                     </div>
                 </div>
+                <!-- ① 고객사별 투입 엔지니어수 (인력 리스크) -->
                 <div class="chart-grid">
                     <!-- ⑥ 고객사별 투입 엔지니어수 (인력 리스크) -->
                     <div class="chart-card">
                         <div class="chart-card-title"><i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i> 고객사별 투입 엔지니어수 (인력 리스크) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">🔴 1명=위험 / 🟡 2명=주의 / 🟢 3명+=양호</small></div>
                         <div class="chart-container tall"><canvas id="chartCustEngRisk"></canvas></div>
-                    </div>
-                    <!-- ⑦ 고객사별 제품 커버리지 히트맵 -->
-                    <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 주요 고객사 × 제품 커버리지</div>
-                        <div class="heatmap-wrapper" id="custHeatmap"></div>
                     </div>
                 </div>
                 <!-- ⑧ 스코어카드 -->
@@ -485,6 +490,13 @@
                     <div class="chart-card">
                         <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 고객사 종합 현황</div>
                         <div style="overflow-x:auto;" id="custScorecard"></div>
+                    </div>
+                </div>
+                <!-- ⑦ 고객사별 제품 커버리지 히트맵 -->
+                <div class="analysis-grid">
+                    <div class="chart-card">
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 주요 고객사 × 제품 커버리지</div>
+                        <div class="heatmap-wrapper" id="custHeatmap"></div>
                     </div>
                 </div>
             </div>
@@ -578,4 +590,6 @@
     <script src="src/app.js"></script>
 </body>
 </html>
+
+
 
