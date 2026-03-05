@@ -1,5 +1,6 @@
 ﻿<!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,7 +27,7 @@
       - 페이지네이션으로 DOM 부하 최소화
     ============================================================
     -->
-    
+
     <!-- SheetJS: 엑셀 파싱 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Chart.js: 시각화 -->
@@ -38,10 +39,13 @@
     <!-- Font Awesome: 아이콘 -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
     <link rel="stylesheet" href="src/styles/main.css">
 </head>
+
 <body>
 
     <!-- ============================================================
@@ -52,7 +56,13 @@
         <div class="header-info" id="headerInfo" style="display:none;">
             <div class="file-chip-list" id="headerFileChips"></div>
             <span class="header-badge" id="headerRowCount"></span>
-            <button class="add-file-btn" onclick="document.getElementById('addFileInput').click()" title="엑셀 파일을 추가로 병합합니다">
+
+            <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="다크 모드 전환">
+                <i class="fas fa-moon" id="themeIcon"></i>
+            </button>
+
+            <button class="add-file-btn" onclick="document.getElementById('addFileInput').click()"
+                title="엑셀 파일을 추가로 병합합니다">
                 <i class="fas fa-plus"></i> 파일 추가
             </button>
             <input type="file" id="addFileInput" accept=".xlsx,.xls" multiple style="display:none">
@@ -102,37 +112,44 @@
 
             <!-- 필터 바 -->
             <div class="filter-bar">
-                <div class="filter-bar-header">
+                <div class="filter-bar-header" id="filterHeader" onclick="toggleFilterCollapsible()"
+                    style="cursor: pointer;" title="클릭하여 필터창 접기/펴기">
                     <div class="filter-bar-title">
                         <i class="fas fa-filter"></i> 데이터 필터
+                        <i class="fas fa-chevron-up" id="filterToggleIcon"
+                            style="margin-left: 8px; color: var(--gray-400); transition: transform 0.3s;"></i>
                     </div>
-                    <div class="filter-actions">
-                        <button class="btn-sm primary" onclick="applyAllFilters()"><i class="fas fa-check"></i> 필터 적용</button>
-                        <button class="btn-sm danger" onclick="clearAllFilters()"><i class="fas fa-times"></i> 전체 초기화</button>
-                    </div>
-                </div>
-                
-                <!-- 날짜 필터 -->
-                <div class="date-filter-row">
-                    <div class="date-input-group">
-                        <label><i class="fas fa-calendar"></i> 시작일</label>
-                        <input type="text" class="date-input" id="dateFrom" placeholder="시작일 선택">
-                    </div>
-                    <span style="color:var(--gray-400);">~</span>
-                    <div class="date-input-group">
-                        <label><i class="fas fa-calendar"></i> 종료일</label>
-                        <input type="text" class="date-input" id="dateTo" placeholder="종료일 선택">
+                    <div class="filter-actions" onclick="event.stopPropagation()">
+                        <button class="btn-sm primary" onclick="applyAllFilters()"><i class="fas fa-check"></i> 필터
+                            적용</button>
+                        <button class="btn-sm danger" onclick="clearAllFilters()"><i class="fas fa-times"></i> 전체
+                            초기화</button>
                     </div>
                 </div>
 
-                <!-- 다중 필터 -->
-                <div class="filter-grid" id="filterGrid">
-                    <!-- JS에서 동적 생성 -->
-                </div>
+                <div id="filterCollapsibleBody" class="filter-body open">
+                    <!-- 날짜 필터 -->
+                    <div class="date-filter-row">
+                        <div class="date-input-group">
+                            <label><i class="fas fa-calendar"></i> 시작일</label>
+                            <input type="text" class="date-input" id="dateFrom" placeholder="시작일 선택">
+                        </div>
+                        <span style="color:var(--gray-400);">~</span>
+                        <div class="date-input-group">
+                            <label><i class="fas fa-calendar"></i> 종료일</label>
+                            <input type="text" class="date-input" id="dateTo" placeholder="종료일 선택">
+                        </div>
+                    </div>
 
-                <!-- 적용된 필터 요약 -->
-                <div class="filter-summary" id="filterSummary">
-                    <span class="no-filter-msg"><i class="fas fa-info-circle"></i> 모든 데이터를 표시합니다 (필터 미적용)</span>
+                    <!-- 다중 필터 -->
+                    <div class="filter-grid" id="filterGrid">
+                        <!-- JS에서 동적 생성 -->
+                    </div>
+
+                    <!-- 적용된 필터 요약 -->
+                    <div class="filter-summary" id="filterSummary">
+                        <span class="no-filter-msg"><i class="fas fa-info-circle"></i> 모든 데이터를 표시합니다 (필터 미적용)</span>
+                    </div>
                 </div>
             </div>
 
@@ -210,7 +227,8 @@
                         <div class="chart-card-title">
                             <i class="fas fa-chart-line" style="color:var(--primary)"></i> 일별 지원 건수 추이
                             <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">
-                                <span style="display:inline-block;width:20px;height:2px;background:#F97316;vertical-align:middle;border-top:2px dashed #F97316;"></span>
+                                <span
+                                    style="display:inline-block;width:20px;height:2px;background:#F97316;vertical-align:middle;border-top:2px dashed #F97316;"></span>
                                 7일 이동평균 포함
                             </small>
                         </div>
@@ -226,35 +244,49 @@
                                 <span style="color:#F59E0B">━</span> 전주 대비 증감(%)&nbsp;&nbsp;
                                 <span style="color:#10B981">■</span> 증가 &nbsp;<span style="color:#EF4444">■</span> 감소
                             </small>
-                            <span id="weeklyTrendSummary" style="float:right;font-size:12px;color:var(--gray-500);font-weight:400;"></span>
+                            <span id="weeklyTrendSummary"
+                                style="float:right;font-size:12px;color:var(--gray-500);font-weight:400;"></span>
                         </div>
                         <div class="chart-container"><canvas id="chartWeeklyTrend"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 지원 제품 비중 <span style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
-                        <div class="chart-container"><canvas id="chartProductPie" class="drillable-chart"></canvas></div>
+                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 지원
+                            제품 비중 <span style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i
+                                    class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
+                        <div class="chart-container"><canvas id="chartProductPie" class="drillable-chart"></canvas>
+                        </div>
                     </div>
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i> 지원유형별 건수 <span style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i>
+                            지원유형별 건수 <span
+                                style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i
+                                    class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
                         <div class="chart-container"><canvas id="chartTypeBar" class="drillable-chart"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--secondary)"></i> 부서별 지원 건수 <span style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--secondary)"></i>
+                            부서별 지원 건수 <span
+                                style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i
+                                    class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
                         <div class="chart-container"><canvas id="chartDeptBar" class="drillable-chart"></canvas></div>
                     </div>
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--danger)"></i> 요일별 지원 패턴</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--danger)"></i> 요일별
+                            지원 패턴</div>
                         <div class="chart-container"><canvas id="chartDayOfWeek"></canvas></div>
                     </div>
                 </div>
                 <!-- 🆕 팀별 가동률 Overview -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-tachometer-alt" style="color:#059669"></i> 팀별(부서별) 가동률 현황 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">가동시간(기술지원·점검·Presales·비상대기·현장실습·고객사교육) / 소정근무(활동일×8h) × 100</small></div>
+                        <div class="chart-card-title"><i class="fas fa-tachometer-alt" style="color:#059669"></i>
+                            팀별(부서별) 가동률 현황 <small
+                                style="color:var(--gray-400);font-weight:400;margin-left:8px;">가동시간(기술지원·점검·Presales·비상대기·현장실습·고객사교육)
+                                / 소정근무(활동일×8h) × 100</small></div>
                         <div class="chart-container"><canvas id="chartOverviewUtil"></canvas></div>
                     </div>
                 </div>
@@ -267,7 +299,9 @@
                 <!-- ① 업무 부하 버블차트: X=건수, Y=시간, 크기=고객사수 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i> 엔지니어 업무 부하 종합 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=고객업무건수 / Y=고객업무시간(h) / 버블크기=담당고객사수 (기술지원·점검·Presales·비상대기·현장실습·교육)</small></div>
+                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i>
+                            엔지니어 업무 부하 종합 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=고객업무건수
+                                / Y=고객업무시간(h) / 버블크기=담당고객사수 (기술지원·점검·Presales·비상대기·현장실습·교육)</small></div>
                         <div class="chart-container tall"><canvas id="chartEngBubble"></canvas></div>
                     </div>
                 </div>
@@ -275,57 +309,74 @@
                 <div class="chart-grid">
                     <!-- 엔지니어별 가동률 막대차트 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-tachometer-alt" style="color:#059669"></i> 엔지니어별 가동률(%) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">가동시간 / (활동일×8h) × 100 | 🟢80%↑ 🟡60~80% 🔴60%↓</small> <span style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
-                        <div class="chart-container xtall"><canvas id="chartEngUtil" class="drillable-chart"></canvas></div>
+                        <div class="chart-card-title"><i class="fas fa-tachometer-alt" style="color:#059669"></i> 엔지니어별
+                            가동률(%) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">가동시간 / (활동일×8h)
+                                × 100 | 🟢80%↑ 🟡60~80% 🔴60%↓</small> <span
+                                style="font-size:10px;color:var(--gray-400);font-weight:400;margin-left:6px;"><i
+                                    class="fas fa-mouse-pointer"></i> 클릭하면 필터 적용</span></div>
+                        <div class="chart-container xtall"><canvas id="chartEngUtil" class="drillable-chart"></canvas>
+                        </div>
                     </div>
                     <!-- 팀별 가동률 비교 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-users" style="color:#2563EB"></i> 팀별(부서별) 가동률 비교 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span id="teamUtilLegend"></span> | 소정근무=팀원활동일합계×8h</small></div>
+                        <div class="chart-card-title"><i class="fas fa-users" style="color:#2563EB"></i> 팀별(부서별) 가동률 비교
+                            <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span
+                                    id="teamUtilLegend"></span> | 소정근무=팀원활동일합계×8h</small></div>
                         <div class="chart-container tall"><canvas id="chartTeamUtil"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ② 엔지니어별 일별 활동 히트맵 (레이더차트) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-star" style="color:var(--warning)"></i> 엔지니어 역량 레이더 (Top 5) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건수·시간·고객사·제품·활동일 5축 비교</small></div>
+                        <div class="chart-card-title"><i class="fas fa-star" style="color:var(--warning)"></i> 엔지니어 역량
+                            레이더 (Top 5) <small
+                                style="color:var(--gray-400);font-weight:400;margin-left:8px;">건수·시간·고객사·제품·활동일 5축
+                                비교</small></div>
                         <div class="chart-container tall"><canvas id="chartEngRadar"></canvas></div>
                     </div>
                     <!-- ③ 내부 vs 외부 비율 수평 100% 스택바 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-balance-scale" style="color:var(--success)"></i> 내부업무 vs 외부고객지원 비율</div>
+                        <div class="chart-card-title"><i class="fas fa-balance-scale" style="color:var(--success)"></i>
+                            내부업무 vs 외부고객지원 비율</div>
                         <div class="chart-container tall"><canvas id="chartEngIntExt"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ④ 엔지니어별 투입시간 워터폴 (부서 색분류) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--secondary)"></i> 엔지니어별 투입시간(h) 비교 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span id="engHoursLegend"></span></small></div>
+                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--secondary)"></i> 엔지니어별
+                            투입시간(h) 비교 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span
+                                    id="engHoursLegend"></span></small></div>
                         <div class="chart-container tall"><canvas id="chartEngHours"></canvas></div>
                     </div>
                     <!-- ⑤ 엔지니어별 일별 지원 추이 (Top 6) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--danger)"></i> 주요 엔지니어 일별 지원 추이 (Top 6)</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--danger)"></i> 주요
+                            엔지니어 일별 지원 추이 (Top 6)</div>
                         <div class="chart-container tall"><canvas id="chartEngDaily"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑥ 제품 전문성 분포 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-cubes" style="color:var(--warning)"></i> 엔지니어별 제품 전문성 분포 (스택형)</div>
+                        <div class="chart-card-title"><i class="fas fa-cubes" style="color:var(--warning)"></i> 엔지니어별 제품
+                            전문성 분포 (스택형)</div>
                         <div class="chart-container xtall"><canvas id="chartEngProduct"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑦ 스코어카드 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 엔지니어 종합 스코어카드</div>
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check"
+                                style="color:var(--primary)"></i> 엔지니어 종합 스코어카드</div>
                         <div style="overflow-x:auto;" id="engScorecard"></div>
                     </div>
                 </div>
                 <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 엔지니어 × 지원유형 히트맵</div>
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 엔지니어 × 지원유형
+                            히트맵</div>
                         <div class="heatmap-wrapper" id="engHeatmap"></div>
                     </div>
                 </div>
@@ -337,52 +388,63 @@
                 <!-- ① 포트폴리오 맵 버블: X=고객사수, Y=건수, R=엔지니어수 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i> 제품 포트폴리오 맵 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=고객사수 / Y=지원건수 / 버블크기=투입엔지니어수</small></div>
+                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i>
+                            제품 포트폴리오 맵 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=고객사수 /
+                                Y=지원건수 / 버블크기=투입엔지니어수</small></div>
                         <div class="chart-container tall"><canvas id="chartProdBubble"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ② 제품군별 비중 도넛 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 제품군별 지원 비중</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 제품군별
+                            지원 비중</div>
                         <div class="chart-container tall"><canvas id="chartProdGroup"></canvas></div>
                     </div>
                     <!-- ③ 제품별 투입시간 vs 건수 (이중축 차트) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--success)"></i> 제품별 건수 vs 투입시간 비교 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간 효율 분석</small></div>
+                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--success)"></i> 제품별 건수
+                            vs 투입시간 비교 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간 효율
+                                분석</small></div>
                         <div class="chart-container tall"><canvas id="chartProdEfficiency"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ④ 제품별 지원유형 구성 (대분류 스택바) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-layer-group" style="color:var(--secondary)"></i> 제품별 지원유형 구성 (기술지원/점검/Presales/내부)</div>
+                        <div class="chart-card-title"><i class="fas fa-layer-group" style="color:var(--secondary)"></i>
+                            제품별 지원유형 구성 (기술지원/점검/Presales/내부)</div>
                         <div class="chart-container tall"><canvas id="chartProdTypeComp"></canvas></div>
                     </div>
                     <!-- ⑤ 제품별 부서 비중 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-sitemap" style="color:var(--danger)"></i> 제품별 부서 투입 비중 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span id="prodDeptLegend"></span></small></div>
+                        <div class="chart-card-title"><i class="fas fa-sitemap" style="color:var(--danger)"></i> 제품별 부서
+                            투입 비중 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;"><span
+                                    id="prodDeptLegend"></span></small></div>
                         <div class="chart-container tall"><canvas id="chartProdDept"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑥ 일별 추이 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--primary)"></i> 제품별 일별 지원 추이 (상위 6개)</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--primary)"></i> 제품별
+                            일별 지원 추이 (상위 6개)</div>
                         <div class="chart-container tall"><canvas id="chartProdDaily"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑦ 스코어카드 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 제품별 상세 현황</div>
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check"
+                                style="color:var(--primary)"></i> 제품별 상세 현황</div>
                         <div style="overflow-x:auto;" id="prodScorecard"></div>
                     </div>
                 </div>
                 <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 제품 × 엔지니어 커버리지</div>
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--danger)"></i> 제품 × 엔지니어
+                            커버리지</div>
                         <div class="heatmap-wrapper" id="prodHeatmap"></div>
                     </div>
                 </div>
@@ -394,50 +456,60 @@
                 <div class="chart-grid">
                     <!-- ① 대분류 도넛 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 업무 대분류별 비중 (내부/기술지원/점검/Presales/교육)</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-pie" style="color:var(--warning)"></i> 업무
+                            대분류별 비중 (내부/기술지원/점검/Presales/교육)</div>
                         <div class="chart-container tall"><canvas id="chartTypeCat"></canvas></div>
                     </div>
                     <!-- ② 방문 vs 원격 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-route" style="color:var(--primary)"></i> 방문 vs 원격 비율</div>
+                        <div class="chart-card-title"><i class="fas fa-route" style="color:var(--primary)"></i> 방문 vs 원격
+                            비율</div>
                         <div class="chart-container tall"><canvas id="chartTypeVisitRemote"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ③ 지원유형별 건수 + 투입시간 이중축 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i> 지원유형별 건수 vs 투입시간(h) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간 비교</small></div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i>
+                            지원유형별 건수 vs 투입시간(h) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당
+                                소요시간 비교</small></div>
                         <div class="chart-container tall"><canvas id="chartTypeCountHours"></canvas></div>
                     </div>
                     <!-- ④ 대분류별 일별 추이 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-area" style="color:var(--secondary)"></i> 대분류별 일별 추이</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-area" style="color:var(--secondary)"></i>
+                            대분류별 일별 추이</div>
                         <div class="chart-container tall"><canvas id="chartTypeTrend"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ⑤ 부서별 업무유형 비중 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-sitemap" style="color:var(--danger)"></i> 부서별 업무 유형 비중</div>
+                        <div class="chart-card-title"><i class="fas fa-sitemap" style="color:var(--danger)"></i> 부서별 업무
+                            유형 비중</div>
                         <div class="chart-container tall"><canvas id="chartTypeDeptComp"></canvas></div>
                     </div>
                     <!-- ⑥ 지원유형별 엔지니어 투입 현황 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-users-cog" style="color:var(--warning)"></i> 지원유형별 엔지니어 투입수 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">인력 분산/집중도</small></div>
+                        <div class="chart-card-title"><i class="fas fa-users-cog" style="color:var(--warning)"></i>
+                            지원유형별 엔지니어 투입수 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">인력
+                                분산/집중도</small></div>
                         <div class="chart-container tall"><canvas id="chartTypeEngCount"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑦ 스코어카드 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 지원유형 상세 현황</div>
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check"
+                                style="color:var(--primary)"></i> 지원유형 상세 현황</div>
                         <div style="overflow-x:auto;" id="typeScorecard"></div>
                     </div>
                 </div>
                 <!-- ⑧ 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 지원유형 × 제품 히트맵</div>
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 지원유형 × 제품
+                            히트맵</div>
                         <div class="heatmap-wrapper" id="typeHeatmap"></div>
                     </div>
                 </div>
@@ -449,31 +521,39 @@
                 <!-- ① 세그멘테이션 버블 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i> 고객사 세그멘테이션 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=지원건수 / Y=사용제품수 / 버블크기=투입엔지니어수</small></div>
+                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i>
+                            고객사 세그멘테이션 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=지원건수 /
+                                Y=사용제품수 / 버블크기=투입엔지니어수</small></div>
                         <div class="chart-container tall"><canvas id="chartCustBubble"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ② Top 15 지원유형 구성 스택바 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i> Top 15 고객사 지원유형 구성</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i> Top
+                            15 고객사 지원유형 구성</div>
                         <div class="chart-container xtall"><canvas id="chartCustTypeComp"></canvas></div>
                     </div>
                     <!-- ③ 고객사별 건수 vs 투입시간 이중축 (Top 15) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--warning)"></i> Top 15 고객사 건수 vs 투입시간 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간 비교</small></div>
+                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--warning)"></i> Top 15
+                            고객사 건수 vs 투입시간 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간
+                                비교</small></div>
                         <div class="chart-container xtall"><canvas id="chartCustEfficiency"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ④ Top 5 추이 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--secondary)"></i> 주요 고객사 지원 추이 (Top 5)</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--secondary)"></i>
+                            주요 고객사 지원 추이 (Top 5)</div>
                         <div class="chart-container tall"><canvas id="chartCustTrend"></canvas></div>
                     </div>
                     <!-- ⑤ 담당영업별 고객사 + 건수 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-user-tie" style="color:var(--danger)"></i> 담당영업별 지원 현황 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건수 + 담당 고객사수</small></div>
+                        <div class="chart-card-title"><i class="fas fa-user-tie" style="color:var(--danger)"></i> 담당영업별
+                            지원 현황 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건수 + 담당
+                                고객사수</small></div>
                         <div class="chart-container tall"><canvas id="chartCustSales"></canvas></div>
                     </div>
                 </div>
@@ -481,21 +561,26 @@
                 <div class="chart-grid">
                     <!-- ⑥ 고객사별 투입 엔지니어수 (인력 리스크) -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-exclamation-triangle" style="color:var(--danger)"></i> 고객사별 투입 엔지니어수 (인력 리스크) <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">🔴 1명=위험 / 🟡 2명=주의 / 🟢 3명+=양호</small></div>
+                        <div class="chart-card-title"><i class="fas fa-exclamation-triangle"
+                                style="color:var(--danger)"></i> 고객사별 투입 엔지니어수 (인력 리스크) <small
+                                style="color:var(--gray-400);font-weight:400;margin-left:8px;">🔴 1명=위험 / 🟡 2명=주의 / 🟢
+                                3명+=양호</small></div>
                         <div class="chart-container tall"><canvas id="chartCustEngRisk"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑧ 스코어카드 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 고객사 종합 현황</div>
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check"
+                                style="color:var(--primary)"></i> 고객사 종합 현황</div>
                         <div style="overflow-x:auto;" id="custScorecard"></div>
                     </div>
                 </div>
                 <!-- ⑦ 고객사별 제품 커버리지 히트맵 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 주요 고객사 × 제품 커버리지</div>
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 주요 고객사 × 제품
+                            커버리지</div>
                         <div class="heatmap-wrapper" id="custHeatmap"></div>
                     </div>
                 </div>
@@ -507,42 +592,52 @@
                 <!-- ① 세그멘테이션 버블: X=고객사수 / Y=건수 / 버블크기=제품수 -->
                 <div class="chart-grid single">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i> 담당영업 포트폴리오 버블 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=담당고객사수 / Y=지원건수 / 버블크기=제품수</small></div>
+                        <div class="chart-card-title"><i class="fas fa-circle-nodes" style="color:var(--primary)"></i>
+                            담당영업 포트폴리오 버블 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">X=담당고객사수
+                                / Y=지원건수 / 버블크기=제품수</small></div>
                         <div class="chart-container tall"><canvas id="chartSalesBubble"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ② 담당영업별 건수 vs 투입시간 이중축 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--warning)"></i> 담당영업별 건수 vs 투입시간 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간 비교</small></div>
+                        <div class="chart-card-title"><i class="fas fa-clock" style="color:var(--warning)"></i> 담당영업별 건수
+                            vs 투입시간 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">건당 소요시간
+                                비교</small></div>
                         <div class="chart-container xtall"><canvas id="chartSalesCountHours"></canvas></div>
                     </div>
                     <!-- ③ 담당영업별 지원유형 구성 스택바 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i> 담당영업별 지원유형 구성</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-bar" style="color:var(--success)"></i>
+                            담당영업별 지원유형 구성</div>
                         <div class="chart-container xtall"><canvas id="chartSalesTypeComp"></canvas></div>
                     </div>
                 </div>
                 <div class="chart-grid">
                     <!-- ④ 담당영업별 담당 고객사수 + 투입 엔지니어수 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-users" style="color:var(--danger)"></i> 담당영업별 고객사수 &amp; 엔지니어수</div>
+                        <div class="chart-card-title"><i class="fas fa-users" style="color:var(--danger)"></i> 담당영업별
+                            고객사수 &amp; 엔지니어수</div>
                         <div class="chart-container tall"><canvas id="chartSalesCustEng"></canvas></div>
                     </div>
                     <!-- ⑤ Top 5 일별 추이 라인 -->
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--secondary)"></i> 주요 담당영업 지원 추이 (Top 5)</div>
+                        <div class="chart-card-title"><i class="fas fa-chart-line" style="color:var(--secondary)"></i>
+                            주요 담당영업 지원 추이 (Top 5)</div>
                         <div class="chart-container tall"><canvas id="chartSalesDaily"></canvas></div>
                     </div>
                 </div>
                 <!-- ⑥ 히트맵 + ⑦ 스코어카드 -->
                 <div class="analysis-grid">
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 담당영업 × 고객사 히트맵 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">지원 건수</small></div>
+                        <div class="chart-card-title"><i class="fas fa-th" style="color:var(--primary)"></i> 담당영업 × 고객사
+                            히트맵 <small style="color:var(--gray-400);font-weight:400;margin-left:8px;">지원 건수</small>
+                        </div>
                         <div class="heatmap-wrapper" id="salesHeatmap"></div>
                     </div>
                     <div class="chart-card">
-                        <div class="chart-card-title"><i class="fas fa-clipboard-check" style="color:var(--primary)"></i> 담당영업 종합 현황</div>
+                        <div class="chart-card-title"><i class="fas fa-clipboard-check"
+                                style="color:var(--primary)"></i> 담당영업 종합 현황</div>
                         <div style="overflow-x:auto;" id="salesScorecard"></div>
                     </div>
                 </div>
@@ -570,7 +665,9 @@
                     </div>
                     <div class="data-table-wrapper" style="max-height:600px;">
                         <table class="data-table" id="dataTable">
-                            <thead><tr id="dataTableHead"></tr></thead>
+                            <thead>
+                                <tr id="dataTableHead"></tr>
+                            </thead>
                             <tbody id="dataTableBody"></tbody>
                         </table>
                     </div>
@@ -589,7 +686,5 @@
     <script src="src/contract-utils.js"></script>
     <script src="src/app.js"></script>
 </body>
+
 </html>
-
-
-
