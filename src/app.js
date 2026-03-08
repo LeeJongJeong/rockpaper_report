@@ -337,6 +337,118 @@
         }
         return filteredComputationCache.store[key];
     }
+
+    const analyticsCore = window.DASH_ANALYTICS_CORE.createAnalyticsCore({
+        CONFIG,
+        FILTER_COLUMNS,
+        PRODUCT_GROUP_RULES,
+        parseDate,
+        formatDateStr,
+        getCachedFilteredValue,
+        getContractWorkHours,
+        getContractWorkHoursForRange,
+        getRawData: () => rawData,
+        getFilterState: () => filterState,
+        getDateRange: () => dateRange,
+        getActiveFilterFromDate: () => activeFilterFromDate,
+        getActiveFilterToDate: () => activeFilterToDate,
+        getCompensationEntries: () => compensationEntries,
+        getComparisonMode: () => comparisonMode,
+        getComparablePeriodCache: () => comparablePeriodCache,
+        setComparablePeriodCache: (nextCache) => { comparablePeriodCache = nextCache; },
+        normalizeComparisonMode,
+        getComparisonModeLabel,
+        safeInlineText
+    });
+
+
+    const filterUI = window.DASH_FILTER_UI.createFilterUI({
+        FILTER_COLUMNS,
+        CONFIG,
+        flatpickr,
+        escapeAttr,
+        safeInlineText,
+        formatNum,
+        debounce,
+        getRawData: () => rawData,
+        getFilteredData: () => filteredData,
+        setFilteredData: (next) => { filteredData = next; },
+        getFilterState: () => filterState,
+        setFilterState: (next) => { filterState = next; },
+        getDateRange: () => dateRange,
+        getDatePickers: () => datePickers,
+        getFilterOutsideClickHandler: () => filterOutsideClickHandler,
+        setFilterOutsideClickHandler: (next) => { filterOutsideClickHandler = next; },
+        getDrilldownState: () => drilldownState,
+        setDrilldownState: (next) => { drilldownState = next; },
+        setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
+        setActiveFilterToDate: (next) => { activeFilterToDate = next; },
+        resetFilteredComputationCache,
+        resetComparablePeriodCache,
+        updateContractHours,
+        updateCurrentTab,
+        updateDrilldownBanner,
+        getComparisonModeLabel,
+        formatDateStr
+    });
+
+
+
+    const tableUI = window.DASH_TABLE_UI.createTableUI({
+        TABLE_COLUMNS,
+        TABLE_COLUMN_TYPES,
+        XLSX,
+        debounce,
+        formatNum,
+        formatDateStr,
+        escapeAttr,
+        escapeHtml,
+        safeInlineText,
+        parseMetricValue,
+        parseDate,
+        showToast,
+        getFilteredData: () => filteredData,
+        getTableState: () => tableState
+    });
+
+    const dataLoader = window.DASH_DATA_LOADER.createDataLoader({
+        CONFIG,
+        DEPT_COLORS,
+        XLSX,
+        parseDate,
+        formatDateStr,
+        showToast,
+        showLoading,
+        formatNum,
+        updateComparisonModeControl,
+        resetDeptColors,
+        resetFilteredComputationCache,
+        resetComparablePeriodCache,
+        initializeFilters,
+        initializeDatePicker,
+        applyAllFilters: () => window.applyAllFilters(),
+        updateHeaderFileInfo,
+        isInternal: (...args) => analyticsCore.isInternal(...args),
+        isBillable: (...args) => analyticsCore.isBillable(...args),
+        typeCategoryOf: (...args) => analyticsCore.typeCategoryOf(...args),
+        visitTypeOf: (...args) => analyticsCore.visitTypeOf(...args),
+        productGroupOf: (...args) => analyticsCore.productGroupOf(...args),
+        calcHours: (...args) => analyticsCore.calcHours(...args),
+        getRawData: () => rawData,
+        setRawData: (next) => { rawData = next; },
+        getLoadedFiles: () => loadedFiles,
+        setLoadedFiles: (next) => { loadedFiles = next; },
+        getColumnNames: () => columnNames,
+        setColumnNames: (next) => { columnNames = next; },
+        getCompensationEntries: () => compensationEntries,
+        setCompensationEntries: (next) => { compensationEntries = next; },
+        setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
+        setActiveFilterToDate: (next) => { activeFilterToDate = next; },
+        setComparisonMode: (next) => { comparisonMode = next; },
+        setFilteredData: (next) => { filteredData = next; },
+        getDateRange: () => dateRange
+    });
+
     function getAllDeptNames(data) {
         return [...new Set(data.map(r => String(r['부서명'] || '').trim()).filter(Boolean))].sort();
     }
@@ -434,224 +546,47 @@
      *  @param {boolean}  appendMode  true = 기존 데이터에 추가, false = 전체 교체
      */
     function handleFiles(fileList, appendMode) {
-        const files = Array.from(fileList).filter(f => {
-            const ext = f.name.split('.').pop().toLowerCase();
-            if (!['xlsx', 'xls'].includes(ext)) {
-                showToast(`${f.name}: 지원하지 않는 형식입니다.`, 'error');
-                return false;
-            }
-            if (f.size > CONFIG.FILE_MAX_MB * 1024 * 1024) {
-                showToast(`${f.name}: 파일 크기가 ${CONFIG.FILE_MAX_MB}MB를 초과합니다.`, 'error');
-                return false;
-            }
-            return true;
-        });
-        if (!files.length) return;
-
-        if (!appendMode) {
-            rawData = [];
-            loadedFiles = [];
-            columnNames = [];
-            compensationEntries = [];
-            activeFilterFromDate = null;
-            activeFilterToDate = null;
-            comparisonMode = 'previous_period';
-            updateComparisonModeControl();
-            resetDeptColors();
-            filteredData = [];
-            resetFilteredComputationCache();
-            resetComparablePeriodCache();
-        }
-        processFilesSequentially(files, 0);
+        return dataLoader.handleFiles(fileList, appendMode);
     }
 
     /** 파일 목록을 순차적으로 읽어 rawData에 누적 */
     function processFilesSequentially(files, idx) {
-        if (idx >= files.length) {
-            finalizeDataLoad();
-            return;
-        }
-        const file = files[idx];
-        showLoading(true,
-            `파일 읽는 중 (${idx + 1}/${files.length})`,
-            `${file.name} · ${(file.size / 1024).toFixed(1)} KB`
-        );
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            showLoading(true, `${file.name} 파싱 중...`, '대용량 파일은 수 초 소요될 수 있습니다');
-            setTimeout(() => {
-                try {
-                    appendExcelData(e.target.result, file.name);
-                    processFilesSequentially(files, idx + 1);
-                } catch (err) {
-                    showLoading(false);
-                    showToast(`${file.name} 파싱 오류: ${err.message}`, 'error');
-                    console.error(err);
-                }
-            }, 50);
-        };
-        reader.onerror = () => {
-            showLoading(false);
-            showToast(`${file.name}을 읽을 수 없습니다.`, 'error');
-        };
-        reader.readAsArrayBuffer(file);
+        return dataLoader.processFilesSequentially(files, idx);
     }
 
     /** 보상 시간 숫자 파싱 */
     function parseMetricValue(v) {
-        if (v === null || v === undefined) return NaN;
-        if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
-        const text = String(v).replace(/,/g, '').trim();
-        if (!text) return NaN;
-        const n = Number(text);
-        return Number.isFinite(n) ? n : NaN;
+        return dataLoader.parseMetricValue(v);
     }
 
     /** 보상 시트 필드명 정규화(공백/탭/개행 제거) */
     function normalizeMetricField(name) {
-        return String(name || '')
-            .replace(/[\s\uFEFF\r\n\t]/g, '')
-            .replace(/[\(\)]/g, '')
-            .trim();
+        return dataLoader.normalizeMetricField(name);
     }
 
     /** 보상 시트 필드 조회(공백 변형 대응) */
     function getCompSheetField(row, fieldName) {
-        const target = normalizeMetricField(fieldName);
-        for (const key in row) {
-            if (normalizeMetricField(key) === target) return row[key];
-        }
-        return '';
+        return dataLoader.getCompSheetField(row, fieldName);
     }
 
     /** 보상 시트 필드명 대체군 조회 */
     function getCompSheetFieldAny(row, candidates) {
-        for (let i = 0; i < candidates.length; i++) {
-            const v = getCompSheetField(row, candidates[i]);
-            if (v !== '' && v !== null && v !== undefined) return v;
-        }
-        return '';
+        return dataLoader.getCompSheetFieldAny(row, candidates);
     }
 
     /** 근무-보상시간 통계 시트에서 엔지니어별 총 보상발생시간 추출 */
     function appendCompensationSheet(wb, fileName) {
-        const compSheetName = (wb.SheetNames || []).find(name => {
-            const n = String(name || '').trim();
-            return n === '근무-보상시간 통계' || n === '근무-보상시간' || /보상.*통계/.test(n);
-        });
-        if (!compSheetName) return;
-
-        const ws = wb.Sheets[compSheetName];
-        if (!ws || !ws['!ref']) return;
-
-        const firstCell = ws['A1'];
-        const firstText = (firstCell && (firstCell.w || firstCell.v)) || '';
-        const periodMatch = String(firstText).match(/(\d{4}-\d{1,2}-\d{1,2})\s*~\s*(\d{4}-\d{1,2}-\d{1,2})/);
-        const periodStart = periodMatch ? parseDate(periodMatch[1]) : null;
-        const periodEnd = periodMatch ? parseDate(periodMatch[2]) : null;
-
-        const compRows = XLSX.utils.sheet_to_json(ws, { range: 3, defval: '', raw: false });
-        if (!Array.isArray(compRows) || !compRows.length) return;
-
-        for (let i = 0; i < compRows.length; i++) {
-            const row = compRows[i];
-            const engineer = String(getCompSheetField(row, '엔지니어') || '').trim();
-            if (!engineer) continue;
-            const compHours = parseMetricValue(getCompSheetFieldAny(row, ['총 보상발생시간', '총보상발생시간', '총 보상 발생시간', '총보상시간']));
-            if (!Number.isFinite(compHours)) continue;
-
-            compensationEntries.push({
-                fileName,
-                engineer,
-                dept: String(getCompSheetField(row, '팀명') || '').trim(),
-                workHours: parseMetricValue(getCompSheetField(row, '근무시간')),
-                substituteHours: parseMetricValue(getCompSheetField(row, '대체 근무시간')),
-                totalWorkHours: parseMetricValue(getCompSheetField(row, '총 근무시간')),
-                compensationHours: compHours,
-                periodStart,
-                periodEnd
-            });
-        }
+        return dataLoader.appendCompensationSheet(wb, fileName);
     }
 
     /** 엑셀 파일 1개를 파싱해 rawData에 추가 (헤더 3행, 데이터 4행부터) */
     function appendExcelData(buffer, fileName) {
-        const wb = XLSX.read(buffer, { type: 'array' });
-        const sheetName = wb.SheetNames[0];
-        const ws = wb.Sheets[sheetName];
-        if (!ws || !ws['!ref']) {
-            showToast(`${fileName}: 시트에 데이터가 없습니다.`, 'error');
-            return;
-        }
-        const json = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '' });
-        if (!json.length) {
-            showToast(`${fileName}: 데이터가 없습니다. 4행부터 시작되는지 확인해주세요.`, 'error');
-            return;
-        }
-        if (!columnNames.length) columnNames = Object.keys(json[0]);
-
-        const fileColor = DEPT_COLORS[loadedFiles.length % DEPT_COLORS.length];
-        for (let i = 0; i < json.length; i++) {
-            const row = json[i];
-            const startDate = parseDate(row['작업시작일시']);
-            const endDate = parseDate(row['작업종료일시']);
-            const supportType = String(row['지원유형'] || '').trim();
-            const productName = String(row['제품명'] || '').trim();
-            row._date = startDate || null;
-            row._endDate = endDate || null;
-            row._dateStr = startDate ? formatDateStr(startDate) : '';
-            row._dayOfWeek = startDate ? startDate.getDay() : -1;
-            row._sourceFile = fileName;   // source file tracking
-            row._isInternal = isInternal(supportType);
-            row._isBillable = isBillable(supportType);
-            row._typeCategory = typeCategoryOf(supportType);
-            row._visitType = visitTypeOf(supportType);
-            row._productGroup = productGroupOf(productName);
-            const workH = calcHours(row);
-            row._hoursNum = workH > 0 ? Math.round(workH * 10) / 10 : 0;
-            row['작업시간(h)'] = row._hoursNum > 0 ? row._hoursNum.toFixed(1) + 'h' : '-';
-            rawData.push(row);
-        }
-        loadedFiles.push({ name: fileName, count: json.length, color: fileColor });
-        appendCompensationSheet(wb, fileName);
+        return dataLoader.appendExcelData(buffer, fileName);
     }
 
     /** 모든 파일 로드 후 날짜 범위 재계산 및 UI 확정 */
     function finalizeDataLoad() {
-        if (!rawData.length) {
-            showLoading(false);
-            showToast('로드된 데이터가 없습니다.', 'error');
-            return;
-        }
-        // 전체 rawData에서 날짜 범위 재계산
-        let minDate = null, maxDate = null;
-        for (let i = 0; i < rawData.length; i++) {
-            const d = rawData[i]._date;
-            if (d) {
-                if (!minDate || d < minDate) minDate = d;
-                if (!maxDate || d > maxDate) maxDate = d;
-            }
-        }
-        dateRange.min = minDate;
-        dateRange.max = maxDate;
-
-        updateHeaderFileInfo();
-        document.getElementById('uploadSection').style.display = 'none';
-        document.getElementById('dashboard').classList.add('active');
-
-        showLoading(true, '필터를 초기화하는 중...');
-        initializeFilters();
-        initializeDatePicker();
-
-        showLoading(true, '차트를 그리는 중...');
-        setTimeout(() => {
-            applyAllFilters();
-            showLoading(false);
-            const msg = loadedFiles.length > 1
-                ? `${loadedFiles.length}개 파일 병합 완료 · 총 ${formatNum(rawData.length)}건`
-                : `${formatNum(rawData.length)}건의 데이터가 로드되었습니다.`;
-            showToast(msg, 'success');
-        }, 100);
+        return dataLoader.finalizeDataLoad();
     }
 
     /** 헤더 파일 칩 & 행 수 업데이트 */
@@ -676,606 +611,112 @@
        필터 초기화 및 관리
        ============================================================ */
 
-    /** 필터 UI 동적 생성 */
+    /** ?? UI ?? ?? */
     function initializeFilters() {
-        const grid = document.getElementById('filterGrid');
-        grid.innerHTML = '';
-        filterState = {};
-
-        FILTER_COLUMNS.forEach(fc => {
-            // 유니크 값 추출 (빈 값 제외)
-            const values = [];
-            const seen = new Set();
-            for (let i = 0; i < rawData.length; i++) {
-                const v = String(rawData[i][fc.key] || '').trim();
-                if (v && !seen.has(v)) {
-                    seen.add(v);
-                    values.push(v);
-                }
-            }
-            values.sort((a, b) => a.localeCompare(b, 'ko'));
-
-            filterState[fc.key] = { options: values, selected: new Set(values) };
-
-            // DOM 생성
-            const group = document.createElement('div');
-            group.className = 'filter-group';
-            group.innerHTML = `
-                    <label>${safeInlineText(fc.label)}</label>
-                    <div class="filter-select-wrapper">
-                        <button class="filter-select-btn" data-key="${escapeAttr(fc.key)}">
-                            <span class="filter-select-text">전체 (${values.length}개)</span>
-                            <i class="fas fa-chevron-down" style="font-size:10px; color:var(--gray-400);"></i>
-                        </button>
-                        <div class="filter-dropdown" data-key="${escapeAttr(fc.key)}">
-                            <div class="filter-dropdown-search">
-                                <input type="text" placeholder="검색..." data-key="${escapeAttr(fc.key)}">
-                            </div>
-                            <div class="filter-dropdown-actions">
-                                <button onclick="filterSelectAll('${fc.key}')">전체 선택</button>
-                                <button onclick="filterDeselectAll('${fc.key}')">전체 해제</button>
-                            </div>
-                            <div class="filter-dropdown-list" data-key="${escapeAttr(fc.key)}">
-                                ${values.map(v => `
-                                    <label class="filter-dropdown-item" data-value="${escapeAttr(v)}">
-                                        <input type="checkbox" checked data-key="${escapeAttr(fc.key)}" data-val="${escapeAttr(v)}">
-                                        <span>${safeInlineText(v)}</span>
-                                    </label>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            grid.appendChild(group);
-        });
-
-        // 이벤트 바인딩
-        setupFilterEvents();
+        return filterUI.initializeFilters();
     }
 
-    /** 필터 이벤트 바인딩 */
+    /** ?? ??? ??? */
     function setupFilterEvents() {
-        // 드롭다운 토글
-        document.querySelectorAll('.filter-select-btn').forEach(btn => {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                const key = this.dataset.key;
-                const dd = document.querySelector(`.filter-dropdown[data-key="${key}"]`);
-                const isOpen = dd.classList.contains('open');
-
-                // 다른 드롭다운 닫기
-                document.querySelectorAll('.filter-dropdown.open').forEach(d => d.classList.remove('open'));
-                document.querySelectorAll('.filter-select-btn.active').forEach(b => b.classList.remove('active'));
-
-                if (!isOpen) {
-                    dd.classList.add('open');
-                    this.classList.add('active');
-                    dd.querySelector('input[type="text"]').focus();
-                }
-            });
-        });
-
-        // 바깥 클릭 시 닫기
-        if (!filterOutsideClickHandler) {
-            filterOutsideClickHandler = function () {
-                document.querySelectorAll('.filter-dropdown.open').forEach(d => d.classList.remove('open'));
-                document.querySelectorAll('.filter-select-btn.active').forEach(b => b.classList.remove('active'));
-            };
-            document.addEventListener('click', filterOutsideClickHandler);
-        }
-        document.querySelectorAll('.filter-dropdown').forEach(dd => {
-            dd.addEventListener('click', e => e.stopPropagation());
-        });
-
-        // 체크박스 변경
-        document.querySelectorAll('.filter-dropdown-list input[type="checkbox"]').forEach(cb => {
-            cb.addEventListener('change', function () {
-                const key = this.dataset.key;
-                const val = this.dataset.val;
-                if (this.checked) {
-                    filterState[key].selected.add(val);
-                } else {
-                    filterState[key].selected.delete(val);
-                }
-                updateFilterBtnText(key);
-                debouncedApply();
-            });
-        });
-
-        // 필터 내 검색
-        document.querySelectorAll('.filter-dropdown-search input').forEach(input => {
-            input.addEventListener('input', function () {
-                const key = this.dataset.key;
-                const query = this.value.toLowerCase();
-                const list = document.querySelector(`.filter-dropdown-list[data-key="${key}"]`);
-                list.querySelectorAll('.filter-dropdown-item').forEach(item => {
-                    const val = item.dataset.value.toLowerCase();
-                    item.style.display = val.includes(query) ? 'flex' : 'none';
-                });
-            });
-        });
+        return filterUI.setupFilterEvents();
     }
 
-    /** 필터 버튼 텍스트 업데이트 */
+    /** ?? ?? ??? ???? */
     function updateFilterBtnText(key) {
-        const fs = filterState[key];
-        const btn = document.querySelector(`.filter-select-btn[data-key="${key}"]`);
-        const textEl = btn.querySelector('.filter-select-text');
-
-        // 기존 배지 제거
-        const oldBadge = btn.querySelector('.filter-badge');
-        if (oldBadge) oldBadge.remove();
-
-        if (fs.selected.size === fs.options.length) {
-            textEl.textContent = `전체 (${fs.options.length}개)`;
-        } else if (fs.selected.size === 0) {
-            textEl.textContent = '선택 없음';
-        } else {
-            const selected = [...fs.selected];
-            textEl.textContent = selected.length <= 2 ? selected.join(', ') : `${selected[0]} 외 ${selected.length - 1}개`;
-            const badge = document.createElement('span');
-            badge.className = 'filter-badge';
-            badge.textContent = fs.selected.size;
-            btn.appendChild(badge);
-        }
+        return filterUI.updateFilterBtnText(key);
     }
 
-    /** 날짜 선택기 초기화 */
+    /** ?? ??? ??? */
     function destroyDatePickers() {
-        if (datePickers.from) {
-            datePickers.from.destroy();
-            datePickers.from = null;
-        }
-        if (datePickers.to) {
-            datePickers.to.destroy();
-            datePickers.to = null;
-        }
+        return filterUI.destroyDatePickers();
     }
+
     function initializeDatePicker() {
-        destroyDatePickers();
-        const config = {
-            locale: 'ko',
-            dateFormat: 'Y-m-d',
-            allowInput: true,
-            onChange: debouncedApply
-        };
-
-        if (dateRange.min) {
-            datePickers.from = flatpickr('#dateFrom', { ...config, defaultDate: dateRange.min, minDate: dateRange.min, maxDate: dateRange.max });
-            datePickers.to = flatpickr('#dateTo', { ...config, defaultDate: dateRange.max, minDate: dateRange.min, maxDate: dateRange.max });
-        }
+        return filterUI.initializeDatePicker();
     }
 
-    /** 전체 선택 */
+    /** ?? ?? */
     window.filterSelectAll = function (key) {
-        filterState[key].selected = new Set(filterState[key].options);
-        document.querySelectorAll(`.filter-dropdown-list[data-key="${key}"] input[type="checkbox"]`).forEach(cb => cb.checked = true);
-        updateFilterBtnText(key);
-        debouncedApply();
+        return filterUI.filterSelectAll(key);
     };
 
-    /** 전체 해제 */
+    /** ?? ?? */
     window.filterDeselectAll = function (key) {
-        filterState[key].selected.clear();
-        document.querySelectorAll(`.filter-dropdown-list[data-key="${key}"] input[type="checkbox"]`).forEach(cb => cb.checked = false);
-        updateFilterBtnText(key);
-        debouncedApply();
+        return filterUI.filterDeselectAll(key);
     };
 
-    /** 전체 필터 초기화 */
+    /** ?? ?? ??? */
     window.clearAllFilters = function () {
-        FILTER_COLUMNS.forEach(fc => {
-            filterState[fc.key].selected = new Set(filterState[fc.key].options);
-            document.querySelectorAll(`.filter-dropdown-list[data-key="${escapeAttr(fc.key)}"] input[type="checkbox"]`).forEach(cb => cb.checked = true);
-            updateFilterBtnText(fc.key);
-        });
-        // 날짜 리셋
-        if (dateRange.min) {
-            document.getElementById('dateFrom')._flatpickr.setDate(dateRange.min);
-            document.getElementById('dateTo')._flatpickr.setDate(dateRange.max);
-        }
-        // 드릴다운 상태 초기화
-        drilldownState = {};
-        updateDrilldownBanner();
-        applyAllFilters();
+        return filterUI.clearAllFilters();
     };
-
-    /** 디바운스된 필터 적용 (150ms) */
-    const debouncedApply = debounce(() => applyAllFilters(), CONFIG.DEBOUNCE_MS);
 
     /* ============================================================
-       필터 적용 및 데이터 필터링 (단일 pass)
+       ?? ?? ? ??? ??? (?? pass)
        ============================================================ */
 
-    /** 모든 필터를 적용하여 filteredData 생성 */
+    /** ?? ??? ???? filteredData ?? */
     window.applyAllFilters = function () {
-        const dateFromEl = document.getElementById('dateFrom');
-        const dateToEl = document.getElementById('dateTo');
-        const fromDate = dateFromEl._flatpickr ? dateFromEl._flatpickr.selectedDates[0] : null;
-        const toDate = dateToEl._flatpickr ? dateToEl._flatpickr.selectedDates[0] : null;
-        activeFilterFromDate = fromDate || dateRange.min;
-        activeFilterToDate = toDate || dateRange.max;
-
-        // 날짜 범위를 문자열로 변환 (비교 최적화)
-        const fromStr = fromDate ? formatDateStr(fromDate) : '';
-        const toStr = toDate ? formatDateStr(toDate) : '';
-
-        // 단일 pass 필터링
-        filteredData = [];
-        resetFilteredComputationCache();
-        resetComparablePeriodCache();
-        for (let i = 0; i < rawData.length; i++) {
-            const row = rawData[i];
-
-            // 날짜 필터
-            if (fromStr && row._dateStr < fromStr) continue;
-            if (toStr && row._dateStr > toStr) continue;
-
-            // 다중 필터 (AND 조건)
-            let pass = true;
-            for (let j = 0; j < FILTER_COLUMNS.length; j++) {
-                const fc = FILTER_COLUMNS[j];
-                const fs = filterState[fc.key];
-                if (fs.selected.size < fs.options.length) {
-                    const val = String(row[fc.key] || '').trim();
-                    if (!fs.selected.has(val) && !(val === '' && fs.selected.size === fs.options.length)) {
-                        pass = false;
-                        break;
-                    }
-                }
-            }
-            if (pass) filteredData.push(row);
-        }
-
-        // 필터 요약 업데이트
-        updateFilterSummary(fromStr, toStr);
-
-        // 필터 기준 소정근무 시간(영업일×8h) 계산
-        updateContractHours(fromDate, toDate);
-
-        // 현재 탭 차트 업데이트
-        updateCurrentTab();
+        return filterUI.applyAllFilters();
     };
 
-    /** 필터 요약 UI 업데이트 */
+    /** ?? ?? UI ???? */
     function updateFilterSummary(fromStr, toStr) {
-        const el = document.getElementById('filterSummary');
-        const tags = [];
-        const compareLabel = getComparisonModeLabel();
-
-        if (fromStr || toStr) {
-            tags.push(`<span class="filter-tag"><span class="tag-label">기간:</span> ${safeInlineText(fromStr || '처음')} ~ ${safeInlineText(toStr || '끝')}</span>`);
-        }
-
-        FILTER_COLUMNS.forEach(fc => {
-            const fs = filterState[fc.key];
-            if (fs.selected.size < fs.options.length && fs.selected.size > 0) {
-                const label = FILTER_COLUMNS.find(f => f.key === fc.key).label;
-                if (fs.selected.size <= 3) {
-                    tags.push(`<span class="filter-tag"><span class="tag-label">${safeInlineText(label)}:</span> ${safeInlineText([...fs.selected].join(', '))}</span>`);
-                } else {
-                    tags.push(`<span class="filter-tag"><span class="tag-label">${safeInlineText(label)}:</span> ${fs.selected.size}개 선택</span>`);
-                }
-            }
-        });
-
-        const compareTag = `<span class="filter-tag filter-tag-neutral"><i class="fas fa-not-equal"></i> 비교: ${safeInlineText(compareLabel)}</span>`;
-
-        if (tags.length === 0) {
-            el.innerHTML = compareTag + '<span class="no-filter-msg"><i class="fas fa-info-circle"></i> 모든 데이터를 표시합니다 (필터 미적용) - 총 ' + formatNum(rawData.length) + '건</span>';
-        } else {
-            el.innerHTML = `<span class="filter-tag" style="background:var(--gray-100);color:var(--gray-600);"><i class="fas fa-filter"></i> ${formatNum(filteredData.length)}건 / ${formatNum(rawData.length)}건</span>` + compareTag + tags.join('');
-        }
+        return filterUI.updateFilterSummary(fromStr, toStr);
     }
-
     function getCompensationEntriesForRange(startDate, endDate) {
-        const from = startDate || null;
-        const to = endDate || null;
-        if (!compensationEntries.length) return [];
-        if (!from && !to) return compensationEntries;
-
-        return compensationEntries.filter(e => {
-            const pStart = e.periodStart;
-            const pEnd = e.periodEnd;
-            if (from && pEnd && pEnd < from) return false;
-            if (to && pStart && pStart > to) return false;
-            return true;
-        });
+        return analyticsCore.getCompensationEntriesForRange(startDate, endDate);
     }
 
-    /** 보상시간 Top 엔지니어 집계 */
     function getCompensationTopEngineers(startDate, endDate, topN = 3) {
-        const rows = getCompensationEntriesForRange(startDate, endDate);
-        if (!rows.length) return { list: [], top: [], total: 0 };
-
-        const totals = {};
-        for (let i = 0; i < rows.length; i++) {
-            const e = rows[i];
-            const name = String(e.engineer || '').trim();
-            if (!name) continue;
-            const v = e.compensationHours;
-            if (!Number.isFinite(v)) continue;
-            totals[name] = (totals[name] || 0) + v;
-        }
-        const list = Object.entries(totals).sort((a, b) => b[1] - a[1]).filter(([, v]) => Number.isFinite(v) && v > 0);
-        const total = list.reduce((s, e) => s + e[1], 0);
-        return {
-            list,
-            top: list.slice(0, topN),
-            total
-        };
+        return analyticsCore.getCompensationTopEngineers(startDate, endDate, topN);
     }
-
 
     function buildDateOnly(date) {
-        return (date instanceof Date && !isNaN(date.getTime()))
-            ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
-            : null;
+        return analyticsCore.buildDateOnly(date);
     }
 
     function shiftDateByDays(date, days) {
-        const base = buildDateOnly(date);
-        if (!base) return null;
-        base.setDate(base.getDate() + days);
-        return base;
+        return analyticsCore.shiftDateByDays(date, days);
     }
 
     function shiftDateByMonths(date, months) {
-        const base = buildDateOnly(date);
-        if (!base) return null;
-        const targetMonthIndex = base.getMonth() + months;
-        const monthStart = new Date(base.getFullYear(), targetMonthIndex, 1);
-        const lastDay = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
-        return new Date(monthStart.getFullYear(), monthStart.getMonth(), Math.min(base.getDate(), lastDay));
+        return analyticsCore.shiftDateByMonths(date, months);
     }
 
     function getRangeSpanDays(startDate, endDate) {
-        const start = buildDateOnly(startDate);
-        const end = buildDateOnly(endDate);
-        if (!start || !end) return 0;
-        return Math.max(1, Math.floor((Math.max(start, end) - Math.min(start, end)) / 86400000) + 1);
+        return analyticsCore.getRangeSpanDays(startDate, endDate);
     }
 
     function formatDateRangeLabel(startDate, endDate) {
-        if (!(startDate instanceof Date) || !(endDate instanceof Date)) return '-';
-        return `${formatDateStr(startDate)} ~ ${formatDateStr(endDate)}`;
+        return analyticsCore.formatDateRangeLabel(startDate, endDate);
     }
 
     function buildCurrentFilterSignature() {
-        const fromStr = activeFilterFromDate ? formatDateStr(activeFilterFromDate) : '';
-        const toStr = activeFilterToDate ? formatDateStr(activeFilterToDate) : '';
-        const parts = FILTER_COLUMNS.map(fc => {
-            const fs = filterState[fc.key];
-            const selected = fs ? [...fs.selected].sort().join('|') : '';
-            return `${fc.key}:${selected}`;
-        });
-        return [rawData.length, fromStr, toStr, normalizeComparisonMode(comparisonMode), parts.join(';;')].join('##');
+        return analyticsCore.buildCurrentFilterSignature();
     }
 
     function rowMatchesSelectedFilters(row) {
-        for (let i = 0; i < FILTER_COLUMNS.length; i++) {
-            const fc = FILTER_COLUMNS[i];
-            const fs = filterState[fc.key];
-            if (!fs || fs.selected.size === fs.options.length) continue;
-            const value = String(row[fc.key] || '').trim();
-            if (!fs.selected.has(value)) return false;
-        }
-        return true;
+        return analyticsCore.rowMatchesSelectedFilters(row);
     }
 
     function collectComparablePeriodData(startDate, endDate) {
-        const from = buildDateOnly(startDate);
-        const to = buildDateOnly(endDate);
-        if (!from || !to) return [];
-        const fromStr = formatDateStr(from);
-        const toStr = formatDateStr(to);
-        const rows = [];
-        for (let i = 0; i < rawData.length; i++) {
-            const row = rawData[i];
-            if (!row._dateStr || row._dateStr < fromStr || row._dateStr > toStr) continue;
-            if (!rowMatchesSelectedFilters(row)) continue;
-            rows.push(row);
-        }
-        return rows;
+        return analyticsCore.collectComparablePeriodData(startDate, endDate);
     }
 
     function getComparablePeriodContext() {
-        const key = buildCurrentFilterSignature();
-        if (comparablePeriodCache.key === key && comparablePeriodCache.value) {
-            return comparablePeriodCache.value;
-        }
-
-        let currentStart = buildDateOnly(activeFilterFromDate || dateRange.min);
-        let currentEnd = buildDateOnly(activeFilterToDate || dateRange.max);
-        if (currentStart && currentEnd && currentStart > currentEnd) {
-            const temp = currentStart;
-            currentStart = currentEnd;
-            currentEnd = temp;
-        }
-
-        const mode = normalizeComparisonMode(comparisonMode);
-        let value = { currentRange: null, previousRange: null, previousData: [], mode: mode, modeLabel: getComparisonModeLabel(mode) };
-        if (currentStart && currentEnd) {
-            const spanDays = getRangeSpanDays(currentStart, currentEnd);
-            let previousStart = null;
-            let previousEnd = null;
-
-            if (mode === 'previous_week') {
-                previousStart = shiftDateByDays(currentStart, -7);
-                previousEnd = shiftDateByDays(currentEnd, -7);
-            } else if (mode === 'previous_month') {
-                previousStart = shiftDateByMonths(currentStart, -1);
-                previousEnd = shiftDateByMonths(currentEnd, -1);
-            } else if (mode === 'previous_year') {
-                previousStart = shiftDateByMonths(currentStart, -12);
-                previousEnd = shiftDateByMonths(currentEnd, -12);
-            } else {
-                previousEnd = shiftDateByDays(currentStart, -1);
-                previousStart = shiftDateByDays(previousEnd, -(spanDays - 1));
-            }
-
-            if (previousStart && previousEnd && previousStart > previousEnd) {
-                const temp = previousStart;
-                previousStart = previousEnd;
-                previousEnd = temp;
-            }
-
-            value = {
-                currentRange: { start: currentStart, end: currentEnd, spanDays },
-                previousRange: previousStart && previousEnd ? { start: previousStart, end: previousEnd, spanDays: getRangeSpanDays(previousStart, previousEnd) } : null,
-                previousData: previousStart && previousEnd ? collectComparablePeriodData(previousStart, previousEnd) : [],
-                mode: mode,
-                modeLabel: getComparisonModeLabel(mode)
-            };
-        }
-
-        comparablePeriodCache = { key, value };
-        return value;
+        return analyticsCore.getComparablePeriodContext();
     }
 
     function summarizeEntityTransition(currentNames, previousNames) {
-        const currentSet = currentNames instanceof Set ? currentNames : new Set(currentNames || []);
-        const previousSet = previousNames instanceof Set ? previousNames : new Set(previousNames || []);
-        let retainedCount = 0;
-        let newCount = 0;
-        currentSet.forEach(name => {
-            if (previousSet.has(name)) retainedCount++;
-            else newCount++;
-        });
-        return {
-            retainedCount,
-            newCount,
-            retainedRatio: currentSet.size > 0 ? (retainedCount / currentSet.size) * 100 : 0,
-            newRatio: currentSet.size > 0 ? (newCount / currentSet.size) * 100 : 0
-        };
+        return analyticsCore.summarizeEntityTransition(currentNames, previousNames);
     }
 
     function buildDeltaHtml(current, previous, options) {
-        const opts = options || {};
-        const decimals = Number.isInteger(opts.decimals) ? opts.decimals : 1;
-        const unit = opts.unit || '';
-        const lowerIsBetter = !!opts.lowerIsBetter;
-        const mode = opts.mode || 'relative';
-        const currentNum = Number(current);
-        const previousNum = Number(previous);
-        const compareLabel = safeInlineText(getComparisonModeLabel());
-
-        if (!Number.isFinite(currentNum) || !Number.isFinite(previousNum)) {
-            return `<span style="color:var(--gray-500);">${compareLabel} 비교 없음</span>`;
-        }
-
-        const zeroThreshold = Math.pow(10, -(decimals + 1));
-        const colorForDelta = delta => {
-            const favorable = lowerIsBetter ? delta < 0 : delta > 0;
-            return favorable ? '#059669' : '#DC2626';
-        };
-
-        if (mode === 'pp') {
-            const delta = currentNum - previousNum;
-            if (Math.abs(delta) < zeroThreshold) {
-                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
-            }
-            const sign = delta > 0 ? '+' : '-';
-            return `<span style="color:${colorForDelta(delta)};">${compareLabel} 대비 ${sign}${Math.abs(delta).toFixed(decimals)}%p</span>`;
-        }
-
-        if (previousNum === 0) {
-            if (currentNum === 0) {
-                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
-            }
-            return `<span style="color:#2563EB;">${compareLabel} 0${unit} -> ${currentNum.toFixed(decimals)}${unit}</span>`;
-        }
-
-        const delta = currentNum - previousNum;
-        if (Math.abs(delta) < zeroThreshold) {
-                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
-        }
-        const sign = delta > 0 ? '+' : '-';
-        const pct = Math.abs((delta / previousNum) * 100);
-        return `<span style="color:${colorForDelta(delta)};">${compareLabel} 대비 ${sign}${Math.abs(delta).toFixed(decimals)}${unit} (${sign}${pct.toFixed(1)}%)</span>`;
+        return analyticsCore.buildDeltaHtml(current, previous, options);
     }
 
     function buildAnalyticsSummary(data, options) {
-        const opts = options || {};
-        const range = opts.range || {};
-        const engMap = opts.engMap || aggregateEngineers(data);
-        const custMap = opts.custMap || aggregateCustomers(data);
-        const engEntries = Object.entries(engMap).sort((a, b) => b[1].count - a[1].count);
-        const custEntries = Object.entries(custMap).sort((a, b) => b[1].count - a[1].count);
-        const productSet = new Set();
-        let totalHours = 0;
-        let billableHours = 0;
-        let externalCount = 0;
-        let internalCount = 0;
-
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            totalHours += Number(row._hoursNum) || 0;
-            if (row._isBillable) billableHours += Number(row._hoursNum) || 0;
-            if (row._isInternal) internalCount++;
-            else externalCount++;
-            const product = String(row['제품명'] || '').trim();
-            if (product) productSet.add(product);
-        }
-
-        const start = range.start instanceof Date ? range.start : null;
-        const end = range.end instanceof Date ? range.end : null;
-        const spanDays = Number(range.spanDays) || (start && end ? getRangeSpanDays(start, end) : (data.length ? 1 : 0));
-        const contractHoursPerEngineer = start && end ? getContractWorkHoursForRange(start, end) : getContractWorkHours();
-        const totalWorkingHours = engEntries.length * contractHoursPerEngineer;
-        const avgUtilPct = totalWorkingHours > 0 ? (billableHours / totalWorkingHours) * 100 : 0;
-        const overTargetEngineers = engEntries.filter(([, m]) => contractHoursPerEngineer > 0 && ((m.billableHours / contractHoursPerEngineer) * 100) >= CONFIG.UTIL.TARGET).length;
-        const underDangerEngineers = engEntries.filter(([, m]) => contractHoursPerEngineer > 0 && ((m.billableHours / contractHoursPerEngineer) * 100) < CONFIG.UTIL.DANGER).length;
-        const utilValues = engEntries.map(([, m]) => contractHoursPerEngineer > 0 ? (m.billableHours / contractHoursPerEngineer) * 100 : 0);
-        const maxUtilPct = utilValues.length ? Math.max(...utilValues) : 0;
-        const minUtilPct = utilValues.length ? Math.min(...utilValues) : 0;
-        const top3EngineerShare = billableHours > 0
-            ? (engEntries.slice(0, 3).reduce((sum, [, m]) => sum + m.billableHours, 0) / billableHours) * 100
-            : 0;
-        const top3CustomerShare = data.length > 0
-            ? (custEntries.slice(0, 3).reduce((sum, [, m]) => sum + m.count, 0) / data.length) * 100
-            : 0;
-        const repeatCustomerCount = custEntries.filter(([, m]) => m.count > 1).length;
-        const singleEngineerCustomers = custEntries.filter(([, m]) => m.engs.size === 1).length;
-        const avgEngineersPerCustomer = custEntries.length
-            ? custEntries.reduce((sum, [, m]) => sum + m.engs.size, 0) / custEntries.length
-            : 0;
-        const avgHoursPerCustomer = custEntries.length ? totalHours / custEntries.length : 0;
-        const topEngineer = engEntries.slice().sort((a, b) => b[1].billableCount - a[1].billableCount)[0] || null;
-        const topCustomer = custEntries[0] || null;
-
-        return {
-            dataCount: data.length,
-            totalHours,
-            billableHours,
-            externalCount,
-            internalCount,
-            activeEngineerCount: engEntries.length,
-            activeCustomerCount: custEntries.length,
-            activeProductCount: productSet.size,
-            days: spanDays || 0,
-            avgPerDay: spanDays > 0 ? data.length / spanDays : 0,
-            avgUtilPct,
-            totalWorkingHours,
-            contractHoursPerEngineer,
-            overTargetEngineers,
-            underDangerEngineers,
-            top3EngineerShare,
-            top3CustomerShare,
-            repeatCustomerCount,
-            repeatCustomerRatio: custEntries.length > 0 ? (repeatCustomerCount / custEntries.length) * 100 : 0,
-            singleEngineerCustomers,
-            singleEngineerCustomerRatio: custEntries.length > 0 ? (singleEngineerCustomers / custEntries.length) * 100 : 0,
-            avgEngineersPerCustomer,
-            avgHoursPerCustomer,
-            maxUtilPct,
-            minUtilPct,
-            utilSpread: maxUtilPct - minUtilPct,
-            topEngineer,
-            topCustomer,
-            engineerSet: new Set(engEntries.map(([name]) => name)),
-            customerSet: new Set(custEntries.map(([name]) => name))
-        };
+        return analyticsCore.buildAnalyticsSummary(data, options);
     }
 
     function makeDrilldownClick(filterKey, allowOther = false) {
@@ -1387,332 +828,102 @@
 
     /** 단일 pass로 여러 컬럼의 카운트 집계 */
     function aggregateCounts(data, ...keys) {
-        const result = {};
-        keys.forEach(k => { result[k] = {}; });
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            keys.forEach(k => {
-                const v = String(row[k] || '').trim();
-                if (v) result[k][v] = (result[k][v] || 0) + 1;
-            });
-        }
-        return result;
+        return analyticsCore.aggregateCounts(data, ...keys);
     }
 
     /** 일별 집계 */
     function aggregateByDate(data) {
-        return getCachedFilteredValue('aggregateByDate', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const ds = data[i]._dateStr;
-                if (ds) map[ds] = (map[ds] || 0) + 1;
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateByDate(data);
     }
 
     function aggregateByKeyAndDate(data, key) {
-        return getCachedFilteredValue(`aggregateByKeyAndDate:${key}`, function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const row = data[i];
-                const k = String(row[key] || '').trim();
-                const d = row._dateStr;
-                if (k && d) {
-                    if (!map[k]) map[k] = {};
-                    map[k][d] = (map[k][d] || 0) + 1;
-                }
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateByKeyAndDate(data, key);
     }
 
     function crossTab(data, key1, key2) {
-        return getCachedFilteredValue(`crossTab:${key1}:${key2}`, function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const v1 = String(data[i][key1] || '').trim();
-                const v2 = String(data[i][key2] || '').trim();
-                if (v1 && v2) {
-                    if (!map[v1]) map[v1] = {};
-                    map[v1][v2] = (map[v1][v2] || 0) + 1;
-                }
-            }
-            return map;
-        }, data);
+        return analyticsCore.crossTab(data, key1, key2);
     }
 
     function topNWithOther(countObj, n, otherLabel = '기타') {
-        const entries = Object.entries(countObj).sort((a, b) => b[1] - a[1]);
-        if (entries.length <= n) return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
-        const top = entries.slice(0, n);
-        const otherSum = entries.slice(n).reduce((s, e) => s + e[1], 0);
-        return {
-            labels: [...top.map(e => e[0]), otherLabel],
-            values: [...top.map(e => e[1]), otherSum]
-        };
+        return analyticsCore.topNWithOther(countObj, n, otherLabel);
     }
 
     /** 유니크 카운트 */
     function uniqueCount(data, key) {
-        const s = new Set();
-        for (let i = 0; i < data.length; i++) {
-            const v = String(data[i][key] || '').trim();
-            if (v) s.add(v);
-        }
-        return s.size;
+        return analyticsCore.uniqueCount(data, key);
     }
 
     /** 유니크 키별 유니크 값 수 */
     function uniqueCountByKey(data, groupKey, countKey) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const g = String(data[i][groupKey] || '').trim();
-            const c = String(data[i][countKey] || '').trim();
-            if (g && c) {
-                if (!map[g]) map[g] = new Set();
-                map[g].add(c);
-            }
-        }
-        const result = {};
-        Object.keys(map).forEach(k => { result[k] = map[k].size; });
-        return result;
+        return analyticsCore.uniqueCountByKey(data, groupKey, countKey);
     }
 
-    /* ============================================================
-       신규 유틸리티: 작업시간, 내부/외부 분류, 제품군, 지원유형 대분류
-       ============================================================ */
-
-    /** 작업시간(h) 계산: 시작~종료 차이
-     *  - 09:00~18:00 (종일근무)인 경우 휴게시간 1시간 차감 → 8h
-     *  - 08:30~17:30 (종일근무)인 경우 휴게시간 1시간 차감 → 8h
-     */
+    /** 작업시간(h) 계산 */
     function calcHours(row) {
-        const s = row._date instanceof Date ? row._date : parseDate(row['작업시작일시']);
-        const e = row._endDate instanceof Date ? row._endDate : parseDate(row['작업종료일시']);
-        if (!(s instanceof Date) || !(e instanceof Date)) return 0;
-        if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
-        let h = (e - s) / (1000 * 60 * 60);
-        if (!(h > 0 && h < 24)) return 0;
-        // Subtract 1 hour lunch break for full-day patterns.
-        const sH = s.getHours(), sM = s.getMinutes();
-        const eH = e.getHours(), eM = e.getMinutes();
-        if ((sH === 9 && sM === 0 && eH === 18 && eM === 0) ||
-            (sH === 8 && sM === 30 && eH === 17 && eM === 30)) {
-            h -= 1;
-        }
-        return h;
+        return analyticsCore.calcHours(row);
     }
 
     function isInternal(type) {
-        return /내부|셀프|교육/.test(type);
+        return analyticsCore.isInternal(type);
     }
 
-    /** 지원유형 → 가동률 포함 여부 (Billable)
-     *  포함: 기술지원, 점검지원, Presales, 비상대기, 현장실습, 고객사교육지원
-     *  제외: 내부업무, 셀프스터디, 일반교육(사내) 등
-     *  가동률 = 가동시간(billableHours) / 소정근무시간(필터 영업일×8h) × 100%
-     */
     function isBillable(type) {
-        return /기술지원|점검지원|Presales|presales|비상대기|현장실습|고객사교육/.test(type);
+        return analyticsCore.isBillable(type);
     }
 
     /** 지원유형 → 대분류 5개 */
     function typeCategoryOf(type) {
-        if (/내부업무/.test(type)) return '내부업무';
-        if (/셀프/.test(type)) return '셀프스터디';
-        if (/교육/.test(type)) return '교육';
-        if (/점검/.test(type)) return '점검지원';
-        if (/Presales|presales/.test(type)) return 'Presales';
-        if (/기술지원/.test(type)) return '기술지원';
-        return '기타';
+        return analyticsCore.typeCategoryOf(type);
     }
 
     /** 지원유형 → 방문/원격/기타 분류 */
     function visitTypeOf(type) {
-        if (/\[방문\]/.test(type)) return '방문';
-        if (/\[원격\]/.test(type)) return '원격';
-        return '기타(내부)';
+        return analyticsCore.visitTypeOf(type);
     }
 
-    /** 제품 → 제품군 그룹핑 (동적 확장형)
-     *  - 알려진 키워드 패턴 → 미리 정의된 그룹명
-     *  - 매칭 안 되면 제품명 자체를 그룹으로 사용 (기타로 몰리지 않음)
-     */
+    /** 제품 → 제품군 그룹핑 */
     function productGroupOf(prod) {
-        if (!prod) return '기타';
-        for (const rule of PRODUCT_GROUP_RULES) {
-            if (rule.re.test(prod)) return rule.group;
-        }
-        // 매칭되지 않는 경우: 제품명 자체를 그룹으로 사용
-        // 복합 제품명(슬래시/콤마 구분)이면 첫 번째 토큰을 사용
-        const cleaned = prod.replace(/\s*[\[\(].*?[\]\)]\s*/g, '').trim();
-        const token = cleaned.split(/[\/,]/)[0].trim();
-        return token || '기타';
+        return analyticsCore.productGroupOf(prod);
     }
 
     /** 엔지니어 종합 집계 (단일 pass) */
     function aggregateEngineers(data) {
-        return getCachedFilteredValue('aggregateEngineers', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const r = data[i];
-                const eng = String(r['엔지니어'] || '').trim();
-                if (!eng) continue;
-                if (!map[eng]) map[eng] = { count: 0, hours: 0, billableHours: 0, billableCount: 0, billableCusts: new Set(), custs: new Set(), prods: new Set(), types: {}, dept: '', dates: new Set(), internal: 0, external: 0 };
-                const m = map[eng];
-                m.count++;
-                const rowH = Number(r._hoursNum) || 0;
-                m.hours += rowH;
-                m.dept = String(r['부서명'] || '').trim() || m.dept;
-                const cust = String(r['고객사명'] || '').trim();
-                if (cust) m.custs.add(cust);
-                const prod = String(r['제품명'] || '').trim();
-                if (prod) m.prods.add(prod);
-                const type = String(r['지원유형'] || '').trim();
-                if (type) { m.types[type] = (m.types[type] || 0) + 1; }
-                if (r._dateStr) m.dates.add(r._dateStr);
-                if (r._isInternal) m.internal++; else m.external++;
-                if (r._isBillable) {
-                    m.billableHours += rowH;
-                    m.billableCount++;
-                    if (cust) m.billableCusts.add(cust);
-                }
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateEngineers(data);
     }
 
     function aggregateCustomers(data) {
-        return getCachedFilteredValue('aggregateCustomers', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const r = data[i];
-                const cust = String(r['고객사명'] || '').trim();
-                if (!cust) continue;
-                if (!map[cust]) map[cust] = { count: 0, hours: 0, prods: new Set(), engs: new Set(), types: {}, sales: new Set() };
-                const m = map[cust];
-                m.count++;
-                m.hours += Number(r._hoursNum) || 0;
-                const p = String(r['제품명'] || '').trim();
-                if (p) m.prods.add(p);
-                const e = String(r['엔지니어'] || '').trim();
-                if (e) m.engs.add(e);
-                const t = String(r['지원유형'] || '').trim();
-                if (t) { m.types[t] = (m.types[t] || 0) + 1; }
-                const s = String(r['담당영업'] || '').trim();
-                if (s) m.sales.add(s);
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateCustomers(data);
     }
 
     function aggregateProducts(data) {
-        return getCachedFilteredValue('aggregateProducts', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const r = data[i];
-                const prod = String(r['제품명'] || '').trim();
-                if (!prod) continue;
-                if (!map[prod]) map[prod] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), types: {} };
-                const m = map[prod];
-                m.count++;
-                m.hours += Number(r._hoursNum) || 0;
-                const c = String(r['고객사명'] || '').trim();
-                if (c) m.custs.add(c);
-                const e = String(r['엔지니어'] || '').trim();
-                if (e) m.engs.add(e);
-                const t = String(r['지원유형'] || '').trim();
-                if (t) { m.types[t] = (m.types[t] || 0) + 1; }
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateProducts(data);
     }
 
     function aggregateSales(data) {
-        return getCachedFilteredValue('aggregateSales', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                const r = data[i];
-                const sales = String(r['담당영업'] || '').trim();
-                if (!sales) continue;
-                if (!map[sales]) map[sales] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), prods: new Set(), types: {}, dates: new Set() };
-                const m = map[sales];
-                m.count++;
-                m.hours += Number(r._hoursNum) || 0;
-                const c = String(r['고객사명'] || '').trim();
-                if (c) m.custs.add(c);
-                const e = String(r['엔지니어'] || '').trim();
-                if (e) m.engs.add(e);
-                const p = String(r['제품명'] || '').trim();
-                if (p) m.prods.add(p);
-                const t = String(r['지원유형'] || '').trim();
-                if (t) m.types[t] = (m.types[t] || 0) + 1;
-                if (r._dateStr) m.dates.add(r._dateStr);
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateSales(data);
     }
 
     function aggregateByTeam(engMap, contractHoursPerEngineer = 0) {
-        const teamMap = {};
-        Object.values(engMap).forEach(m => {
-            const dept = m.dept || '미지정';
-            if (!teamMap[dept]) teamMap[dept] = { billableH: 0, workH: 0, totalH: 0, engCount: 0 };
-            teamMap[dept].billableH += m.billableHours;
-            teamMap[dept].workH += contractHoursPerEngineer;
-            teamMap[dept].totalH += m.hours;
-            teamMap[dept].engCount++;
-        });
-        return teamMap;
+        return analyticsCore.aggregateByTeam(engMap, contractHoursPerEngineer);
     }
-
-    /* ============================================================
-       주차별 집계 & 이동평균 유틸리티
-       ============================================================ */
 
     /** Date → 해당 주 월요일 날짜 문자열(YYYY-MM-DD) */
     function getWeekKey(date) {
-        const d = new Date(date);
-        const day = d.getDay();                        // 0=일, 1=월 ...
-        const diff = (day === 0 ? -6 : 1 - day);      // 월요일까지 오프셋
-        d.setDate(d.getDate() + diff);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${dd}`;
+        return analyticsCore.getWeekKey(date);
     }
 
     /** 주 월요일 키 → "MM/DD~MM/DD" 레이블 */
     function getWeekLabel(mondayKey) {
-        const [y, m, d] = mondayKey.split('-').map(Number);
-        const mon = new Date(y, m - 1, d);
-        const sun = new Date(mon);
-        sun.setDate(sun.getDate() + 6);
-        const fmt = dt => `${dt.getMonth() + 1}/${dt.getDate()}`;
-        return `${fmt(mon)}~${fmt(sun)}`;
+        return analyticsCore.getWeekLabel(mondayKey);
     }
 
     /** 데이터를 주차별로 집계 → { weekKey: count } */
     function aggregateByWeek(data) {
-        return getCachedFilteredValue('aggregateByWeek', function () {
-            const map = {};
-            for (let i = 0; i < data.length; i++) {
-                if (!data[i]._date) continue;
-                const k = getWeekKey(data[i]._date);
-                map[k] = (map[k] || 0) + 1;
-            }
-            return map;
-        }, data);
+        return analyticsCore.aggregateByWeek(data);
     }
 
     function movingAverage(values, n) {
-        return values.map((_, i) => {
-            const start = Math.max(0, i - n + 1);
-            const slice = values.slice(start, i + 1);
-            const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-            return Math.round(avg * 10) / 10;
-        });
+        return analyticsCore.movingAverage(values, n);
     }
 
     /** 히트맵 HTML 생성기 */
@@ -3476,182 +2687,47 @@
         document.getElementById('salesScorecard').innerHTML = scHtml;
     }
 
+
     function updateDetailTab() {
-        tableState.page = 1;
-        tableState.search = document.getElementById('tableSearch').value;
-        applyTableSearchAndRender();
+        return tableUI.updateDetailTab();
     }
 
     function getTableSortValue(row, col) {
-        const type = TABLE_COLUMN_TYPES[col] || 'text';
-        if (type === 'number') {
-            if (col === '작업시간(h)') return Number(row._hoursNum) || 0;
-            return parseMetricValue(row[col]);
-        }
-        if (type === 'date') {
-            if (col === '작업시작일시') return row._date instanceof Date ? row._date.getTime() : Number.NEGATIVE_INFINITY;
-            if (col === '작업종료일시') return row._endDate instanceof Date ? row._endDate.getTime() : Number.NEGATIVE_INFINITY;
-            const parsed = parseDate(row[col]);
-            return parsed instanceof Date ? parsed.getTime() : Number.NEGATIVE_INFINITY;
-        }
-        return String(row[col] || '').toLowerCase();
+        return tableUI.getTableSortValue(row, col);
     }
 
     function compareTableRows(a, b, col, dir) {
-        const type = TABLE_COLUMN_TYPES[col] || 'text';
-        const va = getTableSortValue(a, col);
-        const vb = getTableSortValue(b, col);
-
-        if (type === 'text') {
-            return String(a[col] || '').localeCompare(String(b[col] || ''), 'ko') * dir;
-        }
-
-        const aInvalid = !Number.isFinite(va);
-        const bInvalid = !Number.isFinite(vb);
-        if (aInvalid && bInvalid) return 0;
-        if (aInvalid) return 1;
-        if (bInvalid) return -1;
-        if (va === vb) return 0;
-        return (va > vb ? 1 : -1) * dir;
+        return tableUI.compareTableRows(a, b, col, dir);
     }
 
     /** Table search and render */
     function applyTableSearchAndRender() {
-        const query = tableState.search.toLowerCase().trim();
-
-        if (query) {
-            tableState.searchData = [];
-            for (let i = 0; i < filteredData.length; i++) {
-                const row = filteredData[i];
-                let match = false;
-                for (let j = 0; j < TABLE_COLUMNS.length; j++) {
-                    if (String(row[TABLE_COLUMNS[j]] || '').toLowerCase().includes(query)) {
-                        match = true;
-                        break;
-                    }
-                }
-                if (match) tableState.searchData.push(row);
-            }
-        } else {
-            tableState.searchData = filteredData;
-        }
-
-        if (tableState.sortCol !== null) {
-            const col = TABLE_COLUMNS[tableState.sortCol];
-            const dir = tableState.sortDir === 'asc' ? 1 : -1;
-            tableState.searchData = [...tableState.searchData].sort((a, b) => compareTableRows(a, b, col, dir));
-        }
-
-        renderTable();
+        return tableUI.applyTableSearchAndRender();
     }
 
     /** Table render with pagination */
     function renderTable() {
-        const data = tableState.searchData;
-        const perPage = tableState.perPage;
-        const totalPages = Math.max(1, Math.ceil(data.length / perPage));
-        if (tableState.page > totalPages) tableState.page = totalPages;
-        const page = tableState.page;
-        const start = (page - 1) * perPage;
-        const end = Math.min(start + perPage, data.length);
-        const pageData = data.slice(start, end);
-
-        document.getElementById('tableInfo').textContent =
-            `총 ${formatNum(filteredData.length)}건 중 ${formatNum(data.length)}건 검색됨 │ ${formatNum(start + 1)}~${formatNum(end)} 표시`;
-
-        const thead = document.getElementById('dataTableHead');
-        thead.innerHTML = TABLE_COLUMNS.map((col, i) => {
-            const isSorted = tableState.sortCol === i;
-            const icon = isSorted ? (tableState.sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
-            return `<th class="${isSorted ? 'sorted' : ''}" onclick="sortTable(${i})">${safeInlineText(col)} <span class="sort-icon">${icon}</span></th>`;
-        }).join('');
-
-        const tbody = document.getElementById('dataTableBody');
-        if (pageData.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS.length}" style="text-align:center;padding:40px;color:var(--gray-400);">
-                    <i class="fas fa-search" style="font-size:24px;margin-bottom:8px;display:block;"></i>
-                    데이터가 없습니다
-                </td></tr>`;
-        } else {
-            let html = '';
-            for (let i = 0; i < pageData.length; i++) {
-                html += '<tr>';
-                TABLE_COLUMNS.forEach(col => {
-                    const val = String(pageData[i][col] || '');
-                    const cls = col === '지원내역' ? ' class="td-detail"' : '';
-                    const displayVal = val.length > 100 ? val.substring(0, 100) + '...' : val;
-                    html += `<td${cls} title="${escapeAttr(val)}">${escapeHtml(displayVal).replace(/\r?\n/g, '<br>')}</td>`;
-                });
-                html += '</tr>';
-            }
-            tbody.innerHTML = html;
-        }
-
-        renderPagination(totalPages, page);
+        return tableUI.renderTable();
     }
 
     function renderPagination(totalPages, currentPage) {
-        const el = document.getElementById('pagination');
-        if (totalPages <= 1) { el.innerHTML = ''; return; }
-
-        let html = '';
-        html += `<button class="page-btn" onclick="goPage(1)" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-double-left"></i></button>`;
-        html += `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-left"></i></button>`;
-
-        // 페이지 번호 범위 계산
-        let startP = Math.max(1, currentPage - 3);
-        let endP = Math.min(totalPages, currentPage + 3);
-        if (endP - startP < 6) {
-            if (startP === 1) endP = Math.min(totalPages, 7);
-            else startP = Math.max(1, endP - 6);
-        }
-
-        if (startP > 1) html += `<button class="page-btn" disabled>...</button>`;
-        for (let p = startP; p <= endP; p++) {
-            html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
-        }
-        if (endP < totalPages) html += `<button class="page-btn" disabled>...</button>`;
-
-        html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-right"></i></button>`;
-        html += `<button class="page-btn" onclick="goPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-double-right"></i></button>`;
-
-        el.innerHTML = html;
+        return tableUI.renderPagination(totalPages, currentPage);
     }
 
-    /** 페이지 이동 */
+    /** ??? ?? */
     window.goPage = function (p) {
-        tableState.page = p;
-        renderTable();
-        // 테이블 상단으로 스크롤
-        document.querySelector('.data-table-wrapper').scrollTop = 0;
+        return tableUI.goPage(p);
     };
 
-    /** 컬럼 정렬 */
+    /** ?? ?? */
     window.sortTable = function (colIdx) {
-        if (tableState.sortCol === colIdx) {
-            tableState.sortDir = tableState.sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-            tableState.sortCol = colIdx;
-            tableState.sortDir = 'asc';
-        }
-        applyTableSearchAndRender();
+        return tableUI.sortTable(colIdx);
     };
 
-    /** 엑셀 다운로드 (필터 적용된 데이터) */
+    /** ?? ???? (?? ??? ???) */
     window.exportToExcel = function () {
-        const data = tableState.searchData;
-        if (!data.length) { showToast('다운로드할 데이터가 없습니다.', 'error'); return; }
-
-        const ws = XLSX.utils.json_to_sheet(data.map(r => {
-            const obj = {};
-            TABLE_COLUMNS.forEach(c => { obj[c] = r[c] || ''; });
-            return obj;
-        }));
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, '지원내역');
-        XLSX.writeFile(wb, `지원내역_필터결과_${formatDateStr(new Date())}.xlsx`);
+        return tableUI.exportToExcel();
     };
-
     /* ============================================================
        대시보드 리셋 (다른 파일 업로드)
        ============================================================ */
