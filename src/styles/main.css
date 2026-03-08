@@ -380,6 +380,14 @@
             .filter-grid {
                 grid-template-columns: 1fr;
             }
+
+            .comparison-select-group {
+                margin-left: 0;
+            }
+
+            .comparison-select {
+                width: 160px;
+            }
         }
 
         .filter-group {
@@ -552,7 +560,12 @@
             color: var(--gray-500);
         }
 
-        .date-input {
+        .comparison-select-group {
+            margin-left: 8px;
+        }
+
+        .date-input,
+        .comparison-select {
             padding: 8px 12px;
             border: 1px solid var(--gray-300);
             border-radius: 8px;
@@ -560,9 +573,16 @@
             width: 160px;
             outline: none;
             transition: var(--transition);
+            background: white;
         }
 
-        .date-input:focus {
+        .comparison-select {
+            width: 190px;
+            cursor: pointer;
+        }
+
+        .date-input:focus,
+        .comparison-select:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
         }
@@ -590,6 +610,11 @@
 
         .filter-tag .tag-label {
             font-weight: 600;
+        }
+
+        .filter-tag-neutral {
+            background: var(--gray-100);
+            color: var(--gray-600);
         }
 
         .filter-tag .tag-remove {
@@ -1618,7 +1643,9 @@
         [data-theme="dark"] .tab-nav,
         [data-theme="dark"] .export-btn,
         [data-theme="dark"] .page-btn,
-        [data-theme="dark"] .rows-select {
+        [data-theme="dark"] .rows-select,
+        [data-theme="dark"] .date-input,
+        [data-theme="dark"] .comparison-select {
             background: var(--gray-100);
             border-color: var(--gray-200);
         }

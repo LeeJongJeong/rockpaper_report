@@ -18,6 +18,11 @@
     let contractWorkDays = 0;      // 현재 필터 기준 영업일(주말·공휴일 제외)
     let contractWorkHours = 0;     // 현재 필터 기준 소정근무(=영업일×8h)
     let compensationEntries = [];   // 근무-보상시간 통계 엔지니어별 보상시간 집계
+    let datePickers = { from: null, to: null };
+    let filterOutsideClickHandler = null;
+    let filteredComputationCache = { dataRef: null, store: {} };
+    let comparablePeriodCache = { key: null, value: null };
+    let comparisonMode = 'previous_period';
     let tableState = {             // 테이블 상태
         page: 1,
         perPage: 50, // CONFIG.TABLE_DEFAULT_PER_PAGE
@@ -51,6 +56,13 @@
         { key: '담당영업', label: '담당영업' }
     ];
 
+    const COMPARISON_MODES = {
+        previous_period: { label: '직전 동기간', description: '현재 선택한 기간과 길이가 같은 바로 이전 구간과 비교합니다.' },
+        previous_week: { label: '전주 동일요일', description: '현재 기간을 7일 앞당긴 동일 요일 구간과 비교합니다.' },
+        previous_month: { label: '전월 동일기간', description: '현재 기간을 한 달 앞당긴 동일 달력 구간과 비교합니다.' },
+        previous_year: { label: '전년 동기', description: '현재 기간을 1년 앞당긴 동일 달력 구간과 비교합니다.' }
+    };
+
     const COLORS = APP_CONFIG.COLORS || [
         '#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444',
         '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4',
@@ -70,6 +82,11 @@
         '#F3E8FF', '#DCFCE7', '#FAE8FF', '#E0F2FE', '#FFF7ED'
     ];
     const TABLE_COLUMNS = APP_CONFIG.TABLE_COLUMNS || ['작업시작일시', '작업종료일시', '작업시간(h)', '부서명', '엔지니어', '제품명', '지원유형', '고객사명', '지원내역', '지원도시', '담당영업'];
+    const TABLE_COLUMN_TYPES = Object.assign({
+        '작업시작일시': 'date',
+        '작업종료일시': 'date',
+        '작업시간(h)': 'number'
+    }, APP_CONFIG.TABLE_COLUMN_TYPES || {});
     const PRODUCT_GROUP_RULES = APP_CONFIG.PRODUCT_GROUP_RULES || [];
     const {
         parseDate,
@@ -277,13 +294,56 @@
         deptColorCache = {};
         deptIndex = 0;
     }
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/\r?\n/g, ' ');
+    }
+    function safeInlineText(value) {
+        return escapeHtml(String(value == null ? '' : value).replace(/\r?\n/g, ' '));
+    }
+    function resetFilteredComputationCache() {
+        filteredComputationCache = { dataRef: filteredData, store: {} };
+    }
+    function resetComparablePeriodCache() {
+        comparablePeriodCache = { key: null, value: null };
+    }
+    function normalizeComparisonMode(mode) {
+        return Object.prototype.hasOwnProperty.call(COMPARISON_MODES, mode) ? mode : 'previous_period';
+    }
+    function getComparisonModeMeta(mode) {
+        return COMPARISON_MODES[normalizeComparisonMode(mode || comparisonMode)] || COMPARISON_MODES.previous_period;
+    }
+    function getComparisonModeLabel(mode) {
+        return getComparisonModeMeta(mode).label;
+    }
+    function updateComparisonModeControl() {
+        const select = document.getElementById('comparisonMode');
+        if (select) select.value = normalizeComparisonMode(comparisonMode);
+    }
+    function getCachedFilteredValue(key, producer, data) {
+        if (data !== filteredData) return producer();
+        if (filteredComputationCache.dataRef !== filteredData) {
+            resetFilteredComputationCache();
+        }
+        if (!Object.prototype.hasOwnProperty.call(filteredComputationCache.store, key)) {
+            filteredComputationCache.store[key] = producer();
+        }
+        return filteredComputationCache.store[key];
+    }
     function getAllDeptNames(data) {
         return [...new Set(data.map(r => String(r['부서명'] || '').trim()).filter(Boolean))].sort();
     }
     function buildDeptLegendHTML(deptNames) {
         return deptNames.map(d => {
             const c = getDeptColor(d);
-            return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color}"></span>${d}</span>`;
+            return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color}"></span>${safeInlineText(d)}</span>`;
         }).join('');
     }
 
@@ -330,6 +390,14 @@
 
     function getContractWorkHours() {
         return contractWorkHours;
+    }
+
+    function getContractWorkHoursForRange(startDate, endDate) {
+        const range = getFilterWorkRange(startDate, endDate);
+        const summary = CONTRACT_UTILS.summarizeContractHoursByRange(range.start, range.end, HOLIDAY_DATA, {
+            workHoursPerDay: CONFIG.WORK_HOURS_PER_DAY
+        });
+        return summary.totalWorkHours != null ? summary.totalWorkHours : ((summary.totalWorkDays || 0) * CONFIG.WORK_HOURS_PER_DAY);
     }
 
     /* ============================================================
@@ -387,7 +455,12 @@
             compensationEntries = [];
             activeFilterFromDate = null;
             activeFilterToDate = null;
+            comparisonMode = 'previous_period';
+            updateComparisonModeControl();
             resetDeptColors();
+            filteredData = [];
+            resetFilteredComputationCache();
+            resetComparablePeriodCache();
         }
         processFilesSequentially(files, 0);
     }
@@ -520,13 +593,23 @@
         const fileColor = DEPT_COLORS[loadedFiles.length % DEPT_COLORS.length];
         for (let i = 0; i < json.length; i++) {
             const row = json[i];
-            const d = parseDate(row['작업시작일시']);
-            row._date = d || null;
-            row._dateStr = d ? formatDateStr(d) : '';
-            row._dayOfWeek = d ? d.getDay() : -1;
-            row._sourceFile = fileName;   // 파일 출처 추적
+            const startDate = parseDate(row['작업시작일시']);
+            const endDate = parseDate(row['작업종료일시']);
+            const supportType = String(row['지원유형'] || '').trim();
+            const productName = String(row['제품명'] || '').trim();
+            row._date = startDate || null;
+            row._endDate = endDate || null;
+            row._dateStr = startDate ? formatDateStr(startDate) : '';
+            row._dayOfWeek = startDate ? startDate.getDay() : -1;
+            row._sourceFile = fileName;   // source file tracking
+            row._isInternal = isInternal(supportType);
+            row._isBillable = isBillable(supportType);
+            row._typeCategory = typeCategoryOf(supportType);
+            row._visitType = visitTypeOf(supportType);
+            row._productGroup = productGroupOf(productName);
             const workH = calcHours(row);
-            row['작업시간(h)'] = workH > 0 ? workH.toFixed(1) + 'h' : '-';
+            row._hoursNum = workH > 0 ? Math.round(workH * 10) / 10 : 0;
+            row['작업시간(h)'] = row._hoursNum > 0 ? row._hoursNum.toFixed(1) + 'h' : '-';
             rawData.push(row);
         }
         loadedFiles.push({ name: fileName, count: json.length, color: fileColor });
@@ -576,13 +659,13 @@
         const chipsEl = document.getElementById('headerFileChips');
         const rowEl = document.getElementById('headerRowCount');
         if (loadedFiles.length === 1) {
-            chipsEl.innerHTML = `<span class="header-badge">${loadedFiles[0].name}</span>`;
+            chipsEl.innerHTML = `<span class="header-badge">${safeInlineText(loadedFiles[0].name)}</span>`;
         } else {
             chipsEl.innerHTML = loadedFiles.map(f => {
                 const shortName = f.name.replace(/주간업무보고_/, '').replace(/\.xlsx?$/, '');
                 return `<span class="file-chip">` +
                     `<span class="chip-dot" style="background:${f.color}"></span>` +
-                    `${shortName} <span class="chip-count">${formatNum(f.count)}행</span></span>`;
+                    `${safeInlineText(shortName)} <span class="chip-count">${formatNum(f.count)}행</span></span>`;
             }).join('');
         }
         rowEl.textContent = `총 ${formatNum(rawData.length)}행`;
@@ -618,25 +701,25 @@
             const group = document.createElement('div');
             group.className = 'filter-group';
             group.innerHTML = `
-                    <label>${fc.label}</label>
+                    <label>${safeInlineText(fc.label)}</label>
                     <div class="filter-select-wrapper">
-                        <button class="filter-select-btn" data-key="${fc.key}">
+                        <button class="filter-select-btn" data-key="${escapeAttr(fc.key)}">
                             <span class="filter-select-text">전체 (${values.length}개)</span>
                             <i class="fas fa-chevron-down" style="font-size:10px; color:var(--gray-400);"></i>
                         </button>
-                        <div class="filter-dropdown" data-key="${fc.key}">
+                        <div class="filter-dropdown" data-key="${escapeAttr(fc.key)}">
                             <div class="filter-dropdown-search">
-                                <input type="text" placeholder="검색..." data-key="${fc.key}">
+                                <input type="text" placeholder="검색..." data-key="${escapeAttr(fc.key)}">
                             </div>
                             <div class="filter-dropdown-actions">
                                 <button onclick="filterSelectAll('${fc.key}')">전체 선택</button>
                                 <button onclick="filterDeselectAll('${fc.key}')">전체 해제</button>
                             </div>
-                            <div class="filter-dropdown-list" data-key="${fc.key}">
+                            <div class="filter-dropdown-list" data-key="${escapeAttr(fc.key)}">
                                 ${values.map(v => `
-                                    <label class="filter-dropdown-item" data-value="${v.replace(/"/g, '&quot;')}">
-                                        <input type="checkbox" checked data-key="${fc.key}" data-val="${v.replace(/"/g, '&quot;')}">
-                                        <span>${v}</span>
+                                    <label class="filter-dropdown-item" data-value="${escapeAttr(v)}">
+                                        <input type="checkbox" checked data-key="${escapeAttr(fc.key)}" data-val="${escapeAttr(v)}">
+                                        <span>${safeInlineText(v)}</span>
                                     </label>
                                 `).join('')}
                             </div>
@@ -673,10 +756,13 @@
         });
 
         // 바깥 클릭 시 닫기
-        document.addEventListener('click', () => {
-            document.querySelectorAll('.filter-dropdown.open').forEach(d => d.classList.remove('open'));
-            document.querySelectorAll('.filter-select-btn.active').forEach(b => b.classList.remove('active'));
-        });
+        if (!filterOutsideClickHandler) {
+            filterOutsideClickHandler = function () {
+                document.querySelectorAll('.filter-dropdown.open').forEach(d => d.classList.remove('open'));
+                document.querySelectorAll('.filter-select-btn.active').forEach(b => b.classList.remove('active'));
+            };
+            document.addEventListener('click', filterOutsideClickHandler);
+        }
         document.querySelectorAll('.filter-dropdown').forEach(dd => {
             dd.addEventListener('click', e => e.stopPropagation());
         });
@@ -735,7 +821,18 @@
     }
 
     /** 날짜 선택기 초기화 */
+    function destroyDatePickers() {
+        if (datePickers.from) {
+            datePickers.from.destroy();
+            datePickers.from = null;
+        }
+        if (datePickers.to) {
+            datePickers.to.destroy();
+            datePickers.to = null;
+        }
+    }
     function initializeDatePicker() {
+        destroyDatePickers();
         const config = {
             locale: 'ko',
             dateFormat: 'Y-m-d',
@@ -744,8 +841,8 @@
         };
 
         if (dateRange.min) {
-            flatpickr('#dateFrom', { ...config, defaultDate: dateRange.min, minDate: dateRange.min, maxDate: dateRange.max });
-            flatpickr('#dateTo', { ...config, defaultDate: dateRange.max, minDate: dateRange.min, maxDate: dateRange.max });
+            datePickers.from = flatpickr('#dateFrom', { ...config, defaultDate: dateRange.min, minDate: dateRange.min, maxDate: dateRange.max });
+            datePickers.to = flatpickr('#dateTo', { ...config, defaultDate: dateRange.max, minDate: dateRange.min, maxDate: dateRange.max });
         }
     }
 
@@ -769,7 +866,7 @@
     window.clearAllFilters = function () {
         FILTER_COLUMNS.forEach(fc => {
             filterState[fc.key].selected = new Set(filterState[fc.key].options);
-            document.querySelectorAll(`.filter-dropdown-list[data-key="${fc.key}"] input[type="checkbox"]`).forEach(cb => cb.checked = true);
+            document.querySelectorAll(`.filter-dropdown-list[data-key="${escapeAttr(fc.key)}"] input[type="checkbox"]`).forEach(cb => cb.checked = true);
             updateFilterBtnText(fc.key);
         });
         // 날짜 리셋
@@ -805,6 +902,8 @@
 
         // 단일 pass 필터링
         filteredData = [];
+        resetFilteredComputationCache();
+        resetComparablePeriodCache();
         for (let i = 0; i < rawData.length; i++) {
             const row = rawData[i];
 
@@ -842,9 +941,10 @@
     function updateFilterSummary(fromStr, toStr) {
         const el = document.getElementById('filterSummary');
         const tags = [];
+        const compareLabel = getComparisonModeLabel();
 
         if (fromStr || toStr) {
-            tags.push(`<span class="filter-tag"><span class="tag-label">기간:</span> ${fromStr || '처음'} ~ ${toStr || '끝'}</span>`);
+            tags.push(`<span class="filter-tag"><span class="tag-label">기간:</span> ${safeInlineText(fromStr || '처음')} ~ ${safeInlineText(toStr || '끝')}</span>`);
         }
 
         FILTER_COLUMNS.forEach(fc => {
@@ -852,21 +952,22 @@
             if (fs.selected.size < fs.options.length && fs.selected.size > 0) {
                 const label = FILTER_COLUMNS.find(f => f.key === fc.key).label;
                 if (fs.selected.size <= 3) {
-                    tags.push(`<span class="filter-tag"><span class="tag-label">${label}:</span> ${[...fs.selected].join(', ')}</span>`);
+                    tags.push(`<span class="filter-tag"><span class="tag-label">${safeInlineText(label)}:</span> ${safeInlineText([...fs.selected].join(', '))}</span>`);
                 } else {
-                    tags.push(`<span class="filter-tag"><span class="tag-label">${label}:</span> ${fs.selected.size}개 선택</span>`);
+                    tags.push(`<span class="filter-tag"><span class="tag-label">${safeInlineText(label)}:</span> ${fs.selected.size}개 선택</span>`);
                 }
             }
         });
 
+        const compareTag = `<span class="filter-tag filter-tag-neutral"><i class="fas fa-not-equal"></i> 비교: ${safeInlineText(compareLabel)}</span>`;
+
         if (tags.length === 0) {
-            el.innerHTML = '<span class="no-filter-msg"><i class="fas fa-info-circle"></i> 모든 데이터를 표시합니다 (필터 미적용) — 총 ' + formatNum(rawData.length) + '건</span>';
+            el.innerHTML = compareTag + '<span class="no-filter-msg"><i class="fas fa-info-circle"></i> 모든 데이터를 표시합니다 (필터 미적용) - 총 ' + formatNum(rawData.length) + '건</span>';
         } else {
-            el.innerHTML = `<span class="filter-tag" style="background:var(--gray-100);color:var(--gray-600);"><i class="fas fa-filter"></i> ${formatNum(filteredData.length)}건 / ${formatNum(rawData.length)}건</span>` + tags.join('');
+            el.innerHTML = `<span class="filter-tag" style="background:var(--gray-100);color:var(--gray-600);"><i class="fas fa-filter"></i> ${formatNum(filteredData.length)}건 / ${formatNum(rawData.length)}건</span>` + compareTag + tags.join('');
         }
     }
 
-    /** 현재 필터 기간과 겹치는 근무-보상시간 엔트리 집계 */
     function getCompensationEntriesForRange(startDate, endDate) {
         const from = startDate || null;
         const to = endDate || null;
@@ -905,14 +1006,278 @@
         };
     }
 
-    /* ============================================================
-       차트 드릴다운 필터
-       ============================================================ */
 
-    /** 차트 onClick 핸들러 팩토리 — 반복 패턴을 단일 함수로 추출
-     *  @param {string} filterKey  drillDownFilter에 넘길 컬럼키
-     *  @param {boolean} [allowOther=false] '기타' 레이블도 드릴다운 허용 여부
-     */
+    function buildDateOnly(date) {
+        return (date instanceof Date && !isNaN(date.getTime()))
+            ? new Date(date.getFullYear(), date.getMonth(), date.getDate())
+            : null;
+    }
+
+    function shiftDateByDays(date, days) {
+        const base = buildDateOnly(date);
+        if (!base) return null;
+        base.setDate(base.getDate() + days);
+        return base;
+    }
+
+    function shiftDateByMonths(date, months) {
+        const base = buildDateOnly(date);
+        if (!base) return null;
+        const targetMonthIndex = base.getMonth() + months;
+        const monthStart = new Date(base.getFullYear(), targetMonthIndex, 1);
+        const lastDay = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+        return new Date(monthStart.getFullYear(), monthStart.getMonth(), Math.min(base.getDate(), lastDay));
+    }
+
+    function getRangeSpanDays(startDate, endDate) {
+        const start = buildDateOnly(startDate);
+        const end = buildDateOnly(endDate);
+        if (!start || !end) return 0;
+        return Math.max(1, Math.floor((Math.max(start, end) - Math.min(start, end)) / 86400000) + 1);
+    }
+
+    function formatDateRangeLabel(startDate, endDate) {
+        if (!(startDate instanceof Date) || !(endDate instanceof Date)) return '-';
+        return `${formatDateStr(startDate)} ~ ${formatDateStr(endDate)}`;
+    }
+
+    function buildCurrentFilterSignature() {
+        const fromStr = activeFilterFromDate ? formatDateStr(activeFilterFromDate) : '';
+        const toStr = activeFilterToDate ? formatDateStr(activeFilterToDate) : '';
+        const parts = FILTER_COLUMNS.map(fc => {
+            const fs = filterState[fc.key];
+            const selected = fs ? [...fs.selected].sort().join('|') : '';
+            return `${fc.key}:${selected}`;
+        });
+        return [rawData.length, fromStr, toStr, normalizeComparisonMode(comparisonMode), parts.join(';;')].join('##');
+    }
+
+    function rowMatchesSelectedFilters(row) {
+        for (let i = 0; i < FILTER_COLUMNS.length; i++) {
+            const fc = FILTER_COLUMNS[i];
+            const fs = filterState[fc.key];
+            if (!fs || fs.selected.size === fs.options.length) continue;
+            const value = String(row[fc.key] || '').trim();
+            if (!fs.selected.has(value)) return false;
+        }
+        return true;
+    }
+
+    function collectComparablePeriodData(startDate, endDate) {
+        const from = buildDateOnly(startDate);
+        const to = buildDateOnly(endDate);
+        if (!from || !to) return [];
+        const fromStr = formatDateStr(from);
+        const toStr = formatDateStr(to);
+        const rows = [];
+        for (let i = 0; i < rawData.length; i++) {
+            const row = rawData[i];
+            if (!row._dateStr || row._dateStr < fromStr || row._dateStr > toStr) continue;
+            if (!rowMatchesSelectedFilters(row)) continue;
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    function getComparablePeriodContext() {
+        const key = buildCurrentFilterSignature();
+        if (comparablePeriodCache.key === key && comparablePeriodCache.value) {
+            return comparablePeriodCache.value;
+        }
+
+        let currentStart = buildDateOnly(activeFilterFromDate || dateRange.min);
+        let currentEnd = buildDateOnly(activeFilterToDate || dateRange.max);
+        if (currentStart && currentEnd && currentStart > currentEnd) {
+            const temp = currentStart;
+            currentStart = currentEnd;
+            currentEnd = temp;
+        }
+
+        const mode = normalizeComparisonMode(comparisonMode);
+        let value = { currentRange: null, previousRange: null, previousData: [], mode: mode, modeLabel: getComparisonModeLabel(mode) };
+        if (currentStart && currentEnd) {
+            const spanDays = getRangeSpanDays(currentStart, currentEnd);
+            let previousStart = null;
+            let previousEnd = null;
+
+            if (mode === 'previous_week') {
+                previousStart = shiftDateByDays(currentStart, -7);
+                previousEnd = shiftDateByDays(currentEnd, -7);
+            } else if (mode === 'previous_month') {
+                previousStart = shiftDateByMonths(currentStart, -1);
+                previousEnd = shiftDateByMonths(currentEnd, -1);
+            } else if (mode === 'previous_year') {
+                previousStart = shiftDateByMonths(currentStart, -12);
+                previousEnd = shiftDateByMonths(currentEnd, -12);
+            } else {
+                previousEnd = shiftDateByDays(currentStart, -1);
+                previousStart = shiftDateByDays(previousEnd, -(spanDays - 1));
+            }
+
+            if (previousStart && previousEnd && previousStart > previousEnd) {
+                const temp = previousStart;
+                previousStart = previousEnd;
+                previousEnd = temp;
+            }
+
+            value = {
+                currentRange: { start: currentStart, end: currentEnd, spanDays },
+                previousRange: previousStart && previousEnd ? { start: previousStart, end: previousEnd, spanDays: getRangeSpanDays(previousStart, previousEnd) } : null,
+                previousData: previousStart && previousEnd ? collectComparablePeriodData(previousStart, previousEnd) : [],
+                mode: mode,
+                modeLabel: getComparisonModeLabel(mode)
+            };
+        }
+
+        comparablePeriodCache = { key, value };
+        return value;
+    }
+
+    function summarizeEntityTransition(currentNames, previousNames) {
+        const currentSet = currentNames instanceof Set ? currentNames : new Set(currentNames || []);
+        const previousSet = previousNames instanceof Set ? previousNames : new Set(previousNames || []);
+        let retainedCount = 0;
+        let newCount = 0;
+        currentSet.forEach(name => {
+            if (previousSet.has(name)) retainedCount++;
+            else newCount++;
+        });
+        return {
+            retainedCount,
+            newCount,
+            retainedRatio: currentSet.size > 0 ? (retainedCount / currentSet.size) * 100 : 0,
+            newRatio: currentSet.size > 0 ? (newCount / currentSet.size) * 100 : 0
+        };
+    }
+
+    function buildDeltaHtml(current, previous, options) {
+        const opts = options || {};
+        const decimals = Number.isInteger(opts.decimals) ? opts.decimals : 1;
+        const unit = opts.unit || '';
+        const lowerIsBetter = !!opts.lowerIsBetter;
+        const mode = opts.mode || 'relative';
+        const currentNum = Number(current);
+        const previousNum = Number(previous);
+        const compareLabel = safeInlineText(getComparisonModeLabel());
+
+        if (!Number.isFinite(currentNum) || !Number.isFinite(previousNum)) {
+            return `<span style="color:var(--gray-500);">${compareLabel} 비교 없음</span>`;
+        }
+
+        const zeroThreshold = Math.pow(10, -(decimals + 1));
+        const colorForDelta = delta => {
+            const favorable = lowerIsBetter ? delta < 0 : delta > 0;
+            return favorable ? '#059669' : '#DC2626';
+        };
+
+        if (mode === 'pp') {
+            const delta = currentNum - previousNum;
+            if (Math.abs(delta) < zeroThreshold) {
+                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
+            }
+            const sign = delta > 0 ? '+' : '-';
+            return `<span style="color:${colorForDelta(delta)};">${compareLabel} 대비 ${sign}${Math.abs(delta).toFixed(decimals)}%p</span>`;
+        }
+
+        if (previousNum === 0) {
+            if (currentNum === 0) {
+                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
+            }
+            return `<span style="color:#2563EB;">${compareLabel} 0${unit} -> ${currentNum.toFixed(decimals)}${unit}</span>`;
+        }
+
+        const delta = currentNum - previousNum;
+        if (Math.abs(delta) < zeroThreshold) {
+                return `<span style="color:var(--gray-500);">${compareLabel}과 동일</span>`;
+        }
+        const sign = delta > 0 ? '+' : '-';
+        const pct = Math.abs((delta / previousNum) * 100);
+        return `<span style="color:${colorForDelta(delta)};">${compareLabel} 대비 ${sign}${Math.abs(delta).toFixed(decimals)}${unit} (${sign}${pct.toFixed(1)}%)</span>`;
+    }
+
+    function buildAnalyticsSummary(data, options) {
+        const opts = options || {};
+        const range = opts.range || {};
+        const engMap = opts.engMap || aggregateEngineers(data);
+        const custMap = opts.custMap || aggregateCustomers(data);
+        const engEntries = Object.entries(engMap).sort((a, b) => b[1].count - a[1].count);
+        const custEntries = Object.entries(custMap).sort((a, b) => b[1].count - a[1].count);
+        const productSet = new Set();
+        let totalHours = 0;
+        let billableHours = 0;
+        let externalCount = 0;
+        let internalCount = 0;
+
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i];
+            totalHours += Number(row._hoursNum) || 0;
+            if (row._isBillable) billableHours += Number(row._hoursNum) || 0;
+            if (row._isInternal) internalCount++;
+            else externalCount++;
+            const product = String(row['제품명'] || '').trim();
+            if (product) productSet.add(product);
+        }
+
+        const start = range.start instanceof Date ? range.start : null;
+        const end = range.end instanceof Date ? range.end : null;
+        const spanDays = Number(range.spanDays) || (start && end ? getRangeSpanDays(start, end) : (data.length ? 1 : 0));
+        const contractHoursPerEngineer = start && end ? getContractWorkHoursForRange(start, end) : getContractWorkHours();
+        const totalWorkingHours = engEntries.length * contractHoursPerEngineer;
+        const avgUtilPct = totalWorkingHours > 0 ? (billableHours / totalWorkingHours) * 100 : 0;
+        const overTargetEngineers = engEntries.filter(([, m]) => contractHoursPerEngineer > 0 && ((m.billableHours / contractHoursPerEngineer) * 100) >= CONFIG.UTIL.TARGET).length;
+        const underDangerEngineers = engEntries.filter(([, m]) => contractHoursPerEngineer > 0 && ((m.billableHours / contractHoursPerEngineer) * 100) < CONFIG.UTIL.DANGER).length;
+        const utilValues = engEntries.map(([, m]) => contractHoursPerEngineer > 0 ? (m.billableHours / contractHoursPerEngineer) * 100 : 0);
+        const maxUtilPct = utilValues.length ? Math.max(...utilValues) : 0;
+        const minUtilPct = utilValues.length ? Math.min(...utilValues) : 0;
+        const top3EngineerShare = billableHours > 0
+            ? (engEntries.slice(0, 3).reduce((sum, [, m]) => sum + m.billableHours, 0) / billableHours) * 100
+            : 0;
+        const top3CustomerShare = data.length > 0
+            ? (custEntries.slice(0, 3).reduce((sum, [, m]) => sum + m.count, 0) / data.length) * 100
+            : 0;
+        const repeatCustomerCount = custEntries.filter(([, m]) => m.count > 1).length;
+        const singleEngineerCustomers = custEntries.filter(([, m]) => m.engs.size === 1).length;
+        const avgEngineersPerCustomer = custEntries.length
+            ? custEntries.reduce((sum, [, m]) => sum + m.engs.size, 0) / custEntries.length
+            : 0;
+        const avgHoursPerCustomer = custEntries.length ? totalHours / custEntries.length : 0;
+        const topEngineer = engEntries.slice().sort((a, b) => b[1].billableCount - a[1].billableCount)[0] || null;
+        const topCustomer = custEntries[0] || null;
+
+        return {
+            dataCount: data.length,
+            totalHours,
+            billableHours,
+            externalCount,
+            internalCount,
+            activeEngineerCount: engEntries.length,
+            activeCustomerCount: custEntries.length,
+            activeProductCount: productSet.size,
+            days: spanDays || 0,
+            avgPerDay: spanDays > 0 ? data.length / spanDays : 0,
+            avgUtilPct,
+            totalWorkingHours,
+            contractHoursPerEngineer,
+            overTargetEngineers,
+            underDangerEngineers,
+            top3EngineerShare,
+            top3CustomerShare,
+            repeatCustomerCount,
+            repeatCustomerRatio: custEntries.length > 0 ? (repeatCustomerCount / custEntries.length) * 100 : 0,
+            singleEngineerCustomers,
+            singleEngineerCustomerRatio: custEntries.length > 0 ? (singleEngineerCustomers / custEntries.length) * 100 : 0,
+            avgEngineersPerCustomer,
+            avgHoursPerCustomer,
+            maxUtilPct,
+            minUtilPct,
+            utilSpread: maxUtilPct - minUtilPct,
+            topEngineer,
+            topCustomer,
+            engineerSet: new Set(engEntries.map(([name]) => name)),
+            customerSet: new Set(custEntries.map(([name]) => name))
+        };
+    }
+
     function makeDrilldownClick(filterKey, allowOther = false) {
         return (evt, elements, chart) => {
             if (!elements.length) return;
@@ -973,7 +1338,7 @@
             `<span class="drilldown-banner-label"><i class="fas fa-mouse-pointer"></i> 차트 드릴다운:</span>` +
             entries.map(([key, val]) =>
                 `<span class="drilldown-badge">` +
-                `<span class="drilldown-key">${labelMap[key] || key}</span> <strong>${val}</strong>` +
+                `<span class="drilldown-key">${safeInlineText(labelMap[key] || key)}</span> <strong>${safeInlineText(val)}</strong>` +
                 `<button onclick="clearDrilldown('${key}')" title="해제"><i class="fas fa-times"></i></button>` +
                 `</span>`
             ).join('') +
@@ -1036,44 +1401,47 @@
 
     /** 일별 집계 */
     function aggregateByDate(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const ds = data[i]._dateStr;
-            if (ds) map[ds] = (map[ds] || 0) + 1;
-        }
-        return map;
+        return getCachedFilteredValue('aggregateByDate', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const ds = data[i]._dateStr;
+                if (ds) map[ds] = (map[ds] || 0) + 1;
+            }
+            return map;
+        }, data);
     }
 
-    /** 키별 일별 집계 */
     function aggregateByKeyAndDate(data, key) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const k = String(row[key] || '').trim();
-            const d = row._dateStr;
-            if (k && d) {
-                if (!map[k]) map[k] = {};
-                map[k][d] = (map[k][d] || 0) + 1;
+        return getCachedFilteredValue(`aggregateByKeyAndDate:${key}`, function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const row = data[i];
+                const k = String(row[key] || '').trim();
+                const d = row._dateStr;
+                if (k && d) {
+                    if (!map[k]) map[k] = {};
+                    map[k][d] = (map[k][d] || 0) + 1;
+                }
             }
-        }
-        return map;
+            return map;
+        }, data);
     }
 
-    /** 크로스탭 집계 */
     function crossTab(data, key1, key2) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const v1 = String(data[i][key1] || '').trim();
-            const v2 = String(data[i][key2] || '').trim();
-            if (v1 && v2) {
-                if (!map[v1]) map[v1] = {};
-                map[v1][v2] = (map[v1][v2] || 0) + 1;
+        return getCachedFilteredValue(`crossTab:${key1}:${key2}`, function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const v1 = String(data[i][key1] || '').trim();
+                const v2 = String(data[i][key2] || '').trim();
+                if (v1 && v2) {
+                    if (!map[v1]) map[v1] = {};
+                    map[v1][v2] = (map[v1][v2] || 0) + 1;
+                }
             }
-        }
-        return map;
+            return map;
+        }, data);
     }
 
-    /** 상위 N개 + 기타 그룹핑 */
     function topNWithOther(countObj, n, otherLabel = '기타') {
         const entries = Object.entries(countObj).sort((a, b) => b[1] - a[1]);
         if (entries.length <= n) return { labels: entries.map(e => e[0]), values: entries.map(e => e[1]) };
@@ -1120,14 +1488,13 @@
      *  - 08:30~17:30 (종일근무)인 경우 휴게시간 1시간 차감 → 8h
      */
     function calcHours(row) {
-        const s = row._date;
-        const eStr = String(row['작업종료일시'] || '').trim();
-        if (!s || !eStr) return 0;
-        const e = new Date(eStr.replace(' ', 'T'));
-        if (isNaN(e.getTime())) return 0;
+        const s = row._date instanceof Date ? row._date : parseDate(row['작업시작일시']);
+        const e = row._endDate instanceof Date ? row._endDate : parseDate(row['작업종료일시']);
+        if (!(s instanceof Date) || !(e instanceof Date)) return 0;
+        if (isNaN(s.getTime()) || isNaN(e.getTime())) return 0;
         let h = (e - s) / (1000 * 60 * 60);
         if (!(h > 0 && h < 24)) return 0;
-        // 휴게시간 차감: 종일근무 패턴에 점심시간 1h 제외
+        // Subtract 1 hour lunch break for full-day patterns.
         const sH = s.getHours(), sM = s.getMinutes();
         const eH = e.getHours(), eM = e.getMinutes();
         if ((sH === 9 && sM === 0 && eH === 18 && eM === 0) ||
@@ -1137,7 +1504,6 @@
         return h;
     }
 
-    /** 지원유형 → 내부/외부 분류 */
     function isInternal(type) {
         return /내부|셀프|교육/.test(type);
     }
@@ -1187,106 +1553,105 @@
 
     /** 엔지니어 종합 집계 (단일 pass) */
     function aggregateEngineers(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const r = data[i];
-            const eng = String(r['엔지니어'] || '').trim();
-            if (!eng) continue;
-            if (!map[eng]) map[eng] = { count: 0, hours: 0, billableHours: 0, billableCount: 0, billableCusts: new Set(), custs: new Set(), prods: new Set(), types: {}, dept: '', dates: new Set(), internal: 0, external: 0 };
-            const m = map[eng];
-            m.count++;
-            const rowH = calcHours(r);
-            m.hours += rowH;
-            m.dept = String(r['부서명'] || '').trim() || m.dept;
-            const cust = String(r['고객사명'] || '').trim();
-            if (cust) m.custs.add(cust);
-            const prod = String(r['제품명'] || '').trim();
-            if (prod) m.prods.add(prod);
-            const type = String(r['지원유형'] || '').trim();
-            if (type) { m.types[type] = (m.types[type] || 0) + 1; }
-            if (r._dateStr) m.dates.add(r._dateStr);
-            if (isInternal(type)) m.internal++; else m.external++;
-            if (isBillable(type)) {
-                m.billableHours += rowH;
-                m.billableCount++;
-                if (cust) m.billableCusts.add(cust);
+        return getCachedFilteredValue('aggregateEngineers', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const r = data[i];
+                const eng = String(r['엔지니어'] || '').trim();
+                if (!eng) continue;
+                if (!map[eng]) map[eng] = { count: 0, hours: 0, billableHours: 0, billableCount: 0, billableCusts: new Set(), custs: new Set(), prods: new Set(), types: {}, dept: '', dates: new Set(), internal: 0, external: 0 };
+                const m = map[eng];
+                m.count++;
+                const rowH = Number(r._hoursNum) || 0;
+                m.hours += rowH;
+                m.dept = String(r['부서명'] || '').trim() || m.dept;
+                const cust = String(r['고객사명'] || '').trim();
+                if (cust) m.custs.add(cust);
+                const prod = String(r['제품명'] || '').trim();
+                if (prod) m.prods.add(prod);
+                const type = String(r['지원유형'] || '').trim();
+                if (type) { m.types[type] = (m.types[type] || 0) + 1; }
+                if (r._dateStr) m.dates.add(r._dateStr);
+                if (r._isInternal) m.internal++; else m.external++;
+                if (r._isBillable) {
+                    m.billableHours += rowH;
+                    m.billableCount++;
+                    if (cust) m.billableCusts.add(cust);
+                }
             }
-        }
-        return map;
+            return map;
+        }, data);
     }
 
-    /** 고객사 종합 집계 (단일 pass) */
     function aggregateCustomers(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const r = data[i];
-            const cust = String(r['고객사명'] || '').trim();
-            if (!cust) continue;
-            if (!map[cust]) map[cust] = { count: 0, hours: 0, prods: new Set(), engs: new Set(), types: {}, sales: new Set() };
-            const m = map[cust];
-            m.count++;
-            m.hours += calcHours(r);
-            const p = String(r['제품명'] || '').trim();
-            if (p) m.prods.add(p);
-            const e = String(r['엔지니어'] || '').trim();
-            if (e) m.engs.add(e);
-            const t = String(r['지원유형'] || '').trim();
-            if (t) { m.types[t] = (m.types[t] || 0) + 1; }
-            const s = String(r['담당영업'] || '').trim();
-            if (s) m.sales.add(s);
-        }
-        return map;
+        return getCachedFilteredValue('aggregateCustomers', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const r = data[i];
+                const cust = String(r['고객사명'] || '').trim();
+                if (!cust) continue;
+                if (!map[cust]) map[cust] = { count: 0, hours: 0, prods: new Set(), engs: new Set(), types: {}, sales: new Set() };
+                const m = map[cust];
+                m.count++;
+                m.hours += Number(r._hoursNum) || 0;
+                const p = String(r['제품명'] || '').trim();
+                if (p) m.prods.add(p);
+                const e = String(r['엔지니어'] || '').trim();
+                if (e) m.engs.add(e);
+                const t = String(r['지원유형'] || '').trim();
+                if (t) { m.types[t] = (m.types[t] || 0) + 1; }
+                const s = String(r['담당영업'] || '').trim();
+                if (s) m.sales.add(s);
+            }
+            return map;
+        }, data);
     }
 
-    /** 제품 종합 집계 (단일 pass) */
     function aggregateProducts(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const r = data[i];
-            const prod = String(r['제품명'] || '').trim();
-            if (!prod) continue;
-            if (!map[prod]) map[prod] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), types: {} };
-            const m = map[prod];
-            m.count++;
-            m.hours += calcHours(r);
-            const c = String(r['고객사명'] || '').trim();
-            if (c) m.custs.add(c);
-            const e = String(r['엔지니어'] || '').trim();
-            if (e) m.engs.add(e);
-            const t = String(r['지원유형'] || '').trim();
-            if (t) { m.types[t] = (m.types[t] || 0) + 1; }
-        }
-        return map;
+        return getCachedFilteredValue('aggregateProducts', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const r = data[i];
+                const prod = String(r['제품명'] || '').trim();
+                if (!prod) continue;
+                if (!map[prod]) map[prod] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), types: {} };
+                const m = map[prod];
+                m.count++;
+                m.hours += Number(r._hoursNum) || 0;
+                const c = String(r['고객사명'] || '').trim();
+                if (c) m.custs.add(c);
+                const e = String(r['엔지니어'] || '').trim();
+                if (e) m.engs.add(e);
+                const t = String(r['지원유형'] || '').trim();
+                if (t) { m.types[t] = (m.types[t] || 0) + 1; }
+            }
+            return map;
+        }, data);
     }
 
-    /** 팀(부서)별 가동률 집계 — aggregateEngineers() 결과를 입력으로 받음
-     *  반환: { [dept]: { billableH, workH, totalH, engCount } }
-     */
-
-    /** 담당영업별 집계
-     *  반환: { [salesName]: { count, hours, custs, engs, prods, types, dates } }
-     */
     function aggregateSales(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            const r = data[i];
-            const sales = String(r['담당영업'] || '').trim();
-            if (!sales) continue;
-            if (!map[sales]) map[sales] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), prods: new Set(), types: {}, dates: new Set() };
-            const m = map[sales];
-            m.count++;
-            m.hours += calcHours(r);
-            const c = String(r['고객사명'] || '').trim();
-            if (c) m.custs.add(c);
-            const e = String(r['엔지니어'] || '').trim();
-            if (e) m.engs.add(e);
-            const p = String(r['제품명'] || '').trim();
-            if (p) m.prods.add(p);
-            const t = String(r['지원유형'] || '').trim();
-            if (t) m.types[t] = (m.types[t] || 0) + 1;
-            if (r._dateStr) m.dates.add(r._dateStr);
-        }
-        return map;
+        return getCachedFilteredValue('aggregateSales', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                const r = data[i];
+                const sales = String(r['담당영업'] || '').trim();
+                if (!sales) continue;
+                if (!map[sales]) map[sales] = { count: 0, hours: 0, custs: new Set(), engs: new Set(), prods: new Set(), types: {}, dates: new Set() };
+                const m = map[sales];
+                m.count++;
+                m.hours += Number(r._hoursNum) || 0;
+                const c = String(r['고객사명'] || '').trim();
+                if (c) m.custs.add(c);
+                const e = String(r['엔지니어'] || '').trim();
+                if (e) m.engs.add(e);
+                const p = String(r['제품명'] || '').trim();
+                if (p) m.prods.add(p);
+                const t = String(r['지원유형'] || '').trim();
+                if (t) m.types[t] = (m.types[t] || 0) + 1;
+                if (r._dateStr) m.dates.add(r._dateStr);
+            }
+            return map;
+        }, data);
     }
 
     function aggregateByTeam(engMap, contractHoursPerEngineer = 0) {
@@ -1330,16 +1695,17 @@
 
     /** 데이터를 주차별로 집계 → { weekKey: count } */
     function aggregateByWeek(data) {
-        const map = {};
-        for (let i = 0; i < data.length; i++) {
-            if (!data[i]._date) continue;
-            const k = getWeekKey(data[i]._date);
-            map[k] = (map[k] || 0) + 1;
-        }
-        return map;
+        return getCachedFilteredValue('aggregateByWeek', function () {
+            const map = {};
+            for (let i = 0; i < data.length; i++) {
+                if (!data[i]._date) continue;
+                const k = getWeekKey(data[i]._date);
+                map[k] = (map[k] || 0) + 1;
+            }
+            return map;
+        }, data);
     }
 
-    /** N일 이동평균 계산 (앞 방향 누적, 데이터 부족한 초기 구간은 실제 평균) */
     function movingAverage(values, n) {
         return values.map((_, i) => {
             const start = Math.max(0, i - n + 1);
@@ -1353,10 +1719,10 @@
     function buildHeatmapHTML(rowLabels, colLabels, matrix, maxVal) {
         if (!rowLabels.length || !colLabels.length) return '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터가 없습니다</p>';
         let html = '<table class="heatmap-table"><thead><tr><th></th>';
-        colLabels.forEach(c => { html += `<th>${c}</th>`; });
+        colLabels.forEach(c => { html += `<th>${safeInlineText(c)}</th>`; });
         html += '<th>합계</th></tr></thead><tbody>';
         rowLabels.forEach((rl, ri) => {
-            html += `<tr><td>${rl}</td>`;
+            html += `<tr><td>${safeInlineText(rl)}</td>`;
             let rowSum = 0;
             colLabels.forEach((cl, ci) => {
                 const v = matrix[ri][ci] || 0;
@@ -1492,14 +1858,14 @@
     function rankTableHTML(entries, labelName) {
         if (!entries.length) return '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터가 없습니다</p>';
         const total = entries.reduce((s, e) => s + e[1], 0);
-        let html = `<table class="rank-table"><thead><tr><th>#</th><th>${labelName}</th><th>건수</th><th>비율</th><th>바</th></tr></thead><tbody>`;
+        let html = `<table class="rank-table"><thead><tr><th>#</th><th>${safeInlineText(labelName)}</th><th>건수</th><th>비율</th><th>바</th></tr></thead><tbody>`;
         entries.forEach(([name, count], i) => {
             const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
             const rc = i < 3 ? `rank-${i + 1}` : 'rank-other';
             const barColor = COLORS[i % COLORS.length];
             html += `<tr>
                     <td><span class="rank-num ${rc}">${i + 1}</span></td>
-                    <td>${name}</td>
+                    <td>${safeInlineText(name)}</td>
                     <td><strong>${formatNum(count)}</strong></td>
                     <td>${pct}%</td>
                     <td style="min-width:120px"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
@@ -1519,48 +1885,35 @@
             return;
         }
 
-        // === KPI 카드 업데이트 ===
-        const engCount = uniqueCount(data, '엔지니어');
-        const custCount = uniqueCount(data, '고객사명');
-        const prodCount = uniqueCount(data, '제품명');
-
-        // 기간 계산
-        let minD = null, maxD = null;
-        for (let i = 0; i < data.length; i++) {
-            if (data[i]._date) {
-                if (!minD || data[i]._date < minD) minD = data[i]._date;
-                if (!maxD || data[i]._date > maxD) maxD = data[i]._date;
-            }
-        }
-        const days = minD && maxD ? Math.ceil((maxD - minD) / (1000 * 60 * 60 * 24)) + 1 : 1;
-        const avg = (data.length / days).toFixed(1);
-
-        document.getElementById('kpi-total').textContent = formatNum(data.length);
-        document.getElementById('kpi-total-sub').textContent = `필터 적용 결과`;
-        document.getElementById('kpi-engineers').textContent = formatNum(engCount);
-        document.getElementById('kpi-engineers-sub').textContent = `명 활동`;
-        document.getElementById('kpi-customers').textContent = formatNum(custCount);
-        document.getElementById('kpi-customers-sub').textContent = `개 고객사`;
-        document.getElementById('kpi-products').textContent = formatNum(prodCount);
-        document.getElementById('kpi-products-sub').textContent = `종 제품`;
-        document.getElementById('kpi-period').textContent = minD ? `${formatDateStr(minD)} ~ ${formatDateStr(maxD)}` : '-';
-        document.getElementById('kpi-period-sub').textContent = `${days}일`;
-        document.getElementById('kpi-avg').textContent = avg;
-        document.getElementById('kpi-avg-sub').textContent = `건/일`;
-
-        // === 전체 평균 가동률 KPI ===
+        const compareContext = getComparablePeriodContext();
         const ovEngMap = aggregateEngineers(data);
-        const ovEngEntries = Object.entries(ovEngMap);
-        const ovContractWorkH = getContractWorkHours();
-        const ovTotalBillH = ovEngEntries.reduce((s, e) => s + e[1].billableHours, 0);
-        const ovTotalWorkH = ovEngEntries.length * ovContractWorkH;
-        const ovUtilPct = ovTotalWorkH > 0 ? ((ovTotalBillH / ovTotalWorkH) * 100).toFixed(1) : '-';
-        const ovUtilEl = document.getElementById('kpi-util');
-        ovUtilEl.textContent = ovUtilPct === '-' ? '-' : ovUtilPct + '%';
-        ovUtilEl.style.color = ovUtilPct === '-' ? '' : utilColor(parseFloat(ovUtilPct));
-        document.getElementById('kpi-util-sub').textContent = ovUtilPct === '-' ? '' : `가동${ovTotalBillH.toFixed(0)}h / 소정${ovTotalWorkH}h`;
+        const prevEngMap = aggregateEngineers(compareContext.previousData);
+        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, engMap: ovEngMap });
+        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, engMap: prevEngMap });
+        const customerTransition = summarizeEntityTransition(currentSummary.customerSet, previousSummary.customerSet);
 
-        // === 일별 지원 건수 라인 차트 + 7일 이동평균 ===
+        document.getElementById('kpi-total').textContent = formatNum(currentSummary.dataCount);
+        document.getElementById('kpi-total-sub').innerHTML = buildDeltaHtml(currentSummary.dataCount, previousSummary.dataCount, { decimals: 0, unit: '건' });
+        document.getElementById('kpi-engineers').textContent = formatNum(currentSummary.activeEngineerCount);
+        document.getElementById('kpi-engineers-sub').innerHTML = `${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '명' })} · 목표가동 ${currentSummary.overTargetEngineers}명`;
+        document.getElementById('kpi-customers').textContent = formatNum(currentSummary.activeCustomerCount);
+        document.getElementById('kpi-customers-sub').innerHTML = `반복 ${customerTransition.retainedCount}곳 (${customerTransition.retainedRatio.toFixed(0)}%) · 신규 ${customerTransition.newCount}곳`;
+        document.getElementById('kpi-products').textContent = formatNum(currentSummary.activeProductCount);
+        document.getElementById('kpi-products-sub').innerHTML = `${buildDeltaHtml(currentSummary.activeProductCount, previousSummary.activeProductCount, { decimals: 0, unit: '종' })} · 상위 3고객 ${currentSummary.top3CustomerShare.toFixed(1)}%`;
+        document.getElementById('kpi-period').textContent = compareContext.currentRange ? formatDateRangeLabel(compareContext.currentRange.start, compareContext.currentRange.end) : '-';
+        document.getElementById('kpi-period-sub').innerHTML = compareContext.previousRange
+            ? `${currentSummary.days}\uC77C / ${safeInlineText(compareContext.modeLabel)} ${safeInlineText(formatDateRangeLabel(compareContext.previousRange.start, compareContext.previousRange.end))}`
+            : `${currentSummary.days}일`;
+        document.getElementById('kpi-avg').textContent = currentSummary.avgPerDay.toFixed(1);
+        document.getElementById('kpi-avg-sub').innerHTML = buildDeltaHtml(currentSummary.avgPerDay, previousSummary.avgPerDay, { decimals: 1, unit: '건/일' });
+
+        const ovUtilEl = document.getElementById('kpi-util');
+        ovUtilEl.textContent = currentSummary.activeEngineerCount > 0 ? `${currentSummary.avgUtilPct.toFixed(1)}%` : '-';
+        ovUtilEl.style.color = currentSummary.activeEngineerCount > 0 ? utilColor(currentSummary.avgUtilPct) : '';
+        document.getElementById('kpi-util-sub').innerHTML = currentSummary.activeEngineerCount > 0
+            ? `가동${currentSummary.billableHours.toFixed(0)}h / 소정${currentSummary.totalWorkingHours}h · ${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}`
+            : '<span style="color:var(--gray-500);">비교 없음</span>';
+
         const dailyMap = aggregateByDate(data);
         const sortedDates = Object.keys(dailyMap).sort();
         const dailyValues = sortedDates.map(d => dailyMap[d]);
@@ -1585,20 +1938,15 @@
             '건수', '날짜'
         ));
 
-        // === 주차별 트렌드 차트 ===
         const weeklyMap = aggregateByWeek(data);
         const weekKeys = Object.keys(weeklyMap).sort();
         const weekCounts = weekKeys.map(k => weeklyMap[k]);
         const weekLabels = weekKeys.map(getWeekLabel);
-
-        // 전주 대비 증감률(%) — 첫 주는 null
         const weekDelta = weekCounts.map((c, i) => {
             if (i === 0) return null;
             const prev = weekCounts[i - 1];
             return prev > 0 ? Math.round(((c - prev) / prev) * 1000) / 10 : null;
         });
-
-        // 막대 색상: 첫 주=인디고, 증가=그린, 감소=레드, 보합=그레이
         const wBarBg = weekDelta.map((d, i) => {
             if (i === 0 || d === null) return '#7C3AED99';
             if (d > 0) return '#10B98199';
@@ -1607,7 +1955,6 @@
         });
         const wBarBorder = wBarBg.map(c => c.replace('99', ''));
 
-        // 주차 요약 (전체 기간 평균 vs 최근 4주 평균)
         const totalAvg = weekCounts.reduce((a, b) => a + b, 0) / (weekCounts.length || 1);
         const last4 = weekCounts.slice(-4);
         const last4Avg = last4.reduce((a, b) => a + b, 0) / (last4.length || 1);
@@ -1617,7 +1964,8 @@
         if (summaryEl) {
             summaryEl.innerHTML =
                 `전체 ${weekKeys.length}주 · 주평균 ${totalAvg.toFixed(1)}건 &nbsp;` +
-                `<span style="color:${trendColor};font-weight:600;">${trendDir} 최근 4주 평균 ${last4Avg.toFixed(1)}건</span>`;
+                `<span style="color:${trendColor};font-weight:600;">${trendDir} 최근 4주 평균 ${last4Avg.toFixed(1)}건</span> &nbsp;` +
+                buildDeltaHtml(currentSummary.dataCount, previousSummary.dataCount, { decimals: 0, unit: '건' });
         }
 
         upsertChart('chartWeeklyTrend', {
@@ -1704,20 +2052,17 @@
             }
         });
 
-        // === 제품 파이차트 (드릴다운 지원) ===
         const counts = aggregateCounts(data, '제품명', '지원유형');
         const prodTop = topNWithOther(counts['제품명'], CONFIG.CHART_TOP_N.PIE);
         const prodPieCfg = pieChartConfig(prodTop.labels, prodTop.values);
         prodPieCfg.options.onClick = makeDrilldownClick('제품명');
         upsertChart('chartProductPie', prodPieCfg);
 
-        // === 지원유형 막대차트 (드릴다운 지원) ===
         const typeTop = topNWithOther(counts['지원유형'], CONFIG.CHART_TOP_N.BAR);
         const typeBarCfg = barChartConfig(typeTop.labels, typeTop.values, '지원유형', COLORS.slice(0, typeTop.labels.length), true, '건수', '지원유형');
         typeBarCfg.options.onClick = makeDrilldownClick('지원유형');
         upsertChart('chartTypeBar', typeBarCfg);
 
-        // === 부서별 막대차트 (드릴다운 지원) ===
         const deptCounts = aggregateCounts(data, '부서명');
         const deptEntries = Object.entries(deptCounts['부서명']).sort((a, b) => b[1] - a[1]);
         const deptBarCfg = barChartConfig(
@@ -1726,7 +2071,6 @@
         deptBarCfg.options.onClick = makeDrilldownClick('부서명', true);
         upsertChart('chartDeptBar', deptBarCfg);
 
-        // === 요일별 패턴 ===
         const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
         const dowCounts = [0, 0, 0, 0, 0, 0, 0];
         for (let i = 0; i < data.length; i++) {
@@ -1756,13 +2100,12 @@
             }
         });
 
-        // === 🆕 팀별(부서별) 가동률 Overview 차트 ===
-        const ovTeamMap = aggregateByTeam(ovEngMap, ovContractWorkH);
+        const ovEngEntries = Object.entries(ovEngMap);
+        const ovTeamMap = aggregateByTeam(ovEngMap, currentSummary.contractHoursPerEngineer);
         const ovTeamEntries = Object.entries(ovTeamMap).sort((a, b) => a[0].localeCompare(b[0]));
         const ovTeamNames = ovTeamEntries.map(e => e[0]);
         const ovTeamUtilPcts = ovTeamEntries.map(e => e[1].workH > 0 ? Math.round((e[1].billableH / e[1].workH) * 1000) / 10 : 0);
-        // 전체 평균 가동률을 각 팀에 대비해 표시
-        const ovAvgUtil = ovTotalWorkH > 0 ? (ovTotalBillH / ovTotalWorkH) * 100 : 0;
+        const ovAvgUtil = currentSummary.avgUtilPct;
         upsertChart('chartOverviewUtil', {
             type: 'bar',
             data: {
@@ -1787,7 +2130,7 @@
                                     const te = ovTeamEntries[idx][1];
                                     return [`가동시간: ${te.billableH.toFixed(1)}h`, `소정근무: ${te.workH}h`, `엔지니어: ${te.engCount}명`];
                                 }
-                                return [`가동시간: ${ovTotalBillH.toFixed(1)}h`, `소정근무: ${ovTotalWorkH}h`, `엔지니어: ${ovEngEntries.length}명`];
+                                return [`가동시간: ${currentSummary.billableHours.toFixed(1)}h`, `소정근무: ${currentSummary.totalWorkingHours}h`, `엔지니어: ${ovEngEntries.length}명`];
                             }
                         }
                     }
@@ -1799,7 +2142,6 @@
             }
         });
 
-        // === 자동 인사이트 패널 ===
         const insights = generateInsights(data, ovEngMap, getCompensationTopEngineers(activeFilterFromDate, activeFilterToDate));
         renderInsightPanel(insights);
     }
@@ -2112,11 +2454,11 @@
                 <div class="insight-card ic-${ins.type}">
                     <div class="insight-head">
                         <span class="insight-status">${severityLabel[ins.type] || '정보'}</span>
-                        <div class="insight-label">${ins.label}</div>
-                        <span class="insight-icon">${ins.icon || ''}</span>
+                        <div class="insight-label">${safeInlineText(ins.label)}</div>
+                        <span class="insight-icon">${safeInlineText(ins.icon || '')}</span>
                     </div>
-                    <div class="insight-title">${ins.title}</div>
-                    <div class="insight-desc">${ins.desc}</div>
+                    <div class="insight-title">${safeInlineText(ins.title)}</div>
+                    <div class="insight-desc">${safeInlineText(ins.desc)}</div>
                 </div>
             `).join('');
     }
@@ -2126,6 +2468,7 @@
        ============================================================ */
     function updateEngineerTab() {
         const data = filteredData;
+        const compareContext = getComparablePeriodContext();
         const engMap = aggregateEngineers(data);
         const engEntries = Object.entries(engMap).sort((a, b) => b[1].count - a[1].count);
 
@@ -2136,26 +2479,22 @@
             return;
         }
 
-        // === KPI 미니 ===
-        const totalH = engEntries.reduce((s, e) => s + e[1].hours, 0);
-        const avgCnt = (data.length / engEntries.length).toFixed(1);
-        const maxEng = engEntries.reduce((best, e) => e[1].billableCount > best[1].billableCount ? e : best, engEntries[0]);
-        const totalExternal = engEntries.reduce((s, e) => s + e[1].external, 0);
-        const extPct = data.length > 0 ? ((totalExternal / data.length) * 100).toFixed(1) : 0;
-        // 전체 평균 가동률 계산
-        const totalBillableH = engEntries.reduce((s, e) => s + e[1].billableHours, 0);
-        const engContractWorkH = getContractWorkHours();
-        const totalWorkingH = engEntries.length * engContractWorkH;
-        const avgUtilPct = totalWorkingH > 0 ? ((totalBillableH / totalWorkingH) * 100).toFixed(1) : 0;
+        const prevEngMap = aggregateEngineers(compareContext.previousData);
+        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, engMap: engMap });
+        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, engMap: prevEngMap });
+        const engineerTransition = summarizeEntityTransition(currentSummary.engineerSet, previousSummary.engineerSet);
+        const engContractWorkH = currentSummary.contractHoursPerEngineer;
+        const prevEngContractWorkH = previousSummary.contractHoursPerEngineer;
+
         document.getElementById('engKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">총 엔지니어</div><div class="kpi-mini-value">${engEntries.length}</div><div class="kpi-mini-sub">명 활동</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalH.toFixed(0)}</div><div class="kpi-mini-sub">시간 (h)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">평균 가동률</div><div class="kpi-mini-value" style="color:${utilColor(parseFloat(avgUtilPct))}">${avgUtilPct}%</div><div class="kpi-mini-sub">가동${totalBillableH.toFixed(0)}h / 소정${totalWorkingH}h</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">외부지원 비율</div><div class="kpi-mini-value">${extPct}%</div><div class="kpi-mini-sub">${totalExternal}건 / ${data.length}건</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">고객지원 최다활동</div><div class="kpi-mini-value">${maxEng[0]}</div><div class="kpi-mini-sub">${maxEng[1].billableCount}건, ${maxEng[1].billableHours.toFixed(0)}h</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">활동 엔지니어</div><div class="kpi-mini-value">${currentSummary.activeEngineerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '명' })} · 유지 ${engineerTransition.retainedCount}명</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">평균 가동률</div><div class="kpi-mini-value" style="color:${utilColor(currentSummary.avgUtilPct)}">${currentSummary.avgUtilPct.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">목표 가동 달성</div><div class="kpi-mini-value">${currentSummary.overTargetEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.overTargetEngineers, previousSummary.overTargetEngineers, { decimals: 0, unit: '명' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">저가동 위험</div><div class="kpi-mini-value">${currentSummary.underDangerEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.underDangerEngineers, previousSummary.underDangerEngineers, { decimals: 0, unit: '명', lowerIsBetter: true })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">업무 집중도</div><div class="kpi-mini-value">${currentSummary.top3EngineerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3EngineerShare, previousSummary.top3EngineerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">가동률 편차</div><div class="kpi-mini-value">${currentSummary.utilSpread.toFixed(1)}%p</div><div class="kpi-mini-sub">최고 ${currentSummary.maxUtilPct.toFixed(1)} / 최저 ${currentSummary.minUtilPct.toFixed(1)}</div></div>
             `;
 
-        // ① 버블차트: X=고객업무 건수, Y=고객업무 시간, R=담당 고객사수 (billable만)
         const bubbleData = engEntries.map((e, i) => ({
             label: e[0],
             data: [{ x: e[1].billableCount, y: Math.round(e[1].billableHours * 10) / 10, r: Math.max(5, e[1].billableCusts.size * 3) }],
@@ -2179,7 +2518,6 @@
             }
         });
 
-        // 🆕 엔지니어별 가동률 막대차트
         const engByUtil = engEntries.map(([name, m]) => {
             const workingH = engContractWorkH;
             const utilPct = workingH > 0 ? (m.billableHours / workingH) * 100 : 0;
@@ -2232,9 +2570,8 @@
             }
         });
 
-        // 🆕 팀별(부서별) 가동률 비교 차트
         const teamMap = {};
-        engEntries.forEach(([name, m]) => {
+        engEntries.forEach(([, m]) => {
             const dept = m.dept || '미지정';
             if (!teamMap[dept]) teamMap[dept] = { billableH: 0, workingH: 0, engCount: 0, totalH: 0 };
             const tm = teamMap[dept];
@@ -2246,10 +2583,8 @@
         const teamEntries = Object.entries(teamMap).sort((a, b) => a[0].localeCompare(b[0]));
         const teamNames = teamEntries.map(e => e[0]);
         const teamUtilPcts = teamEntries.map(e => e[1].workingH > 0 ? Math.round((e[1].billableH / e[1].workingH) * 1000) / 10 : 0);
-        // 팀별 가동률 레전드 동적 생성
-        const teamDeptNamesForLegend = teamNames;
         const teamUtilLegendEl = document.getElementById('teamUtilLegend');
-        if (teamUtilLegendEl) teamUtilLegendEl.innerHTML = buildDeptLegendHTML(teamDeptNamesForLegend);
+        if (teamUtilLegendEl) teamUtilLegendEl.innerHTML = buildDeptLegendHTML(teamNames);
         upsertChart('chartTeamUtil', {
             type: 'bar',
             data: {
@@ -2299,7 +2634,6 @@
             }
         });
 
-        // ② 역량 레이더: Top 5 엔지니어의 5축(건수, 시간, 고객사, 제품, 활동일) 비교
         const maxVals = { count: 0, hours: 0, custs: 0, prods: 0, dates: 0 };
         engEntries.forEach(([, m]) => {
             if (m.count > maxVals.count) maxVals.count = m.count;
@@ -2341,7 +2675,6 @@
             }
         });
 
-        // ③ 내부 vs 외부 100% 스택바
         const engNames = engEntries.map(e => e[0]);
         upsertChart('chartEngIntExt', {
             type: 'bar',
@@ -2362,10 +2695,8 @@
             }
         });
 
-        // ④ 엔지니어별 투입시간(h) - 부서별 색상 분류 (동적)
         const engByHours = engEntries.sort((a, b) => b[1].hours - a[1].hours);
         const hourColors = engByHours.map(e => getDeptColor(e[1].dept).color + 'CC');
-        // 투입시간 차트 레전드 동적 생성
         const engHoursLegendEl = document.getElementById('engHoursLegend');
         if (engHoursLegendEl) engHoursLegendEl.innerHTML = buildDeptLegendHTML(getAllDeptNames(data));
         upsertChart('chartEngHours', barChartConfig(
@@ -2373,10 +2704,8 @@
             engByHours.map(e => Math.round(e[1].hours * 10) / 10),
             '투입시간(h)', hourColors, true, '시간(h)', '엔지니어'
         ));
-        // 다시 건수 내림차순 정렬 복원
         engEntries.sort((a, b) => b[1].count - a[1].count);
 
-        // ⑤ 주요 엔지니어 일별 지원 추이 (Top 6 라인차트)
         const engDaily = aggregateByKeyAndDate(data, '엔지니어');
         const allDatesEng = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
         const top6Eng = engEntries.slice(0, CONFIG.CHART_TOP_N.TREND).map(e => e[0]);
@@ -2389,7 +2718,6 @@
             '건수', '날짜'
         ));
 
-        // ⑥ 엔지니어별 제품 전문성 스택바
         const allProds = [...new Set(data.map(r => String(r['제품명'] || '').trim()).filter(Boolean))];
         const engProd = crossTab(data, '엔지니어', '제품명');
         const engNamesForStack = engEntries.map(e => e[0]);
@@ -2402,7 +2730,6 @@
             true, '건수', '엔지니어'
         ));
 
-        // ⑦ 히트맵: 엔지니어 × 지원유형
         const allTypes = [...new Set(data.map(r => String(r['지원유형'] || '').trim()).filter(Boolean))];
         const engTypeX = crossTab(data, '엔지니어', '지원유형');
         let maxHM = 0;
@@ -2410,23 +2737,30 @@
         const hmMatrix = hmNames.map(eng => allTypes.map(t => { const v = (engTypeX[eng] || {})[t] || 0; if (v > maxHM) maxHM = v; return v; }));
         document.getElementById('engHeatmap').innerHTML = buildHeatmapHTML(hmNames, allTypes, hmMatrix, maxHM);
 
-        // ⑧ 스코어카드 (확장: 가동률 지표 추가)
-        let scHtml = '<table class="scorecard-table"><thead><tr><th>엔지니어</th><th>부서</th><th>건수</th><th>시간(h)</th><th>건당시간</th><th>활동일</th><th>건/일</th><th>고객사</th><th>제품수</th><th>가동시간</th><th>소정근무</th><th>가동률</th><th>업무강도</th></tr></thead><tbody>';
+        let scHtml = '<table class="scorecard-table"><thead><tr><th>엔지니어</th><th>부서</th><th>건수</th><th>시간(h)</th><th>건당시간</th><th>활동일</th><th>건/일</th><th>고객사</th><th>제품수</th><th>가동시간</th><th>소정근무</th><th>가동률</th><th>직전 대비</th><th>업무강도</th></tr></thead><tbody>';
         engEntries.forEach(([name, m]) => {
             const daysActive = m.dates.size || 1;
             const perDay = (m.count / daysActive).toFixed(1);
             const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
             const deptColorInfo = getDeptColor(m.dept);
-            // 가동률 계산
             const billH = m.billableHours;
             const workH = engContractWorkH;
             const utilPctEng = workH > 0 ? (billH / workH) * 100 : 0;
-            const utilBadge = utilPctEng >= CONFIG.UTIL.TARGET ? 'low' : utilPctEng >= CONFIG.UTIL.DANGER ? 'mid' : 'high'; // low=green, high=red
-            // 업무강도: 시간/활동일 기준
+            const utilBadge = utilPctEng >= CONFIG.UTIL.TARGET ? 'low' : utilPctEng >= CONFIG.UTIL.DANGER ? 'mid' : 'high';
             const intensity = m.hours / daysActive;
             const intBadge = intensity >= 10 ? 'high' : intensity >= 7 ? 'mid' : 'low';
             const intLabel = intensity >= 10 ? '과부하' : intensity >= 7 ? '적정' : '여유';
-            scHtml += `<tr><td>${name}</td><td><span class="sc-dept" style="background:${deptColorInfo.bg};color:${deptColorInfo.color}">${m.dept}</span></td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${daysActive}</td><td>${perDay}</td><td>${m.custs.size}</td><td>${m.prods.size}</td><td>${billH.toFixed(1)}h</td><td>${workH}h</td><td><span class="sc-badge ${utilBadge}">${utilPctEng.toFixed(1)}%</span></td><td><span class="sc-badge ${intBadge}">${intLabel} (${intensity.toFixed(1)}h/일)</span></td></tr>`;
+            const prevM = prevEngMap[name] || null;
+            let compareText = compareContext.previousData.length ? '신규' : '비교없음';
+            let compareBadge = compareContext.previousData.length ? 'mid' : 'low';
+            if (prevM) {
+                const prevUtil = prevEngContractWorkH > 0 ? (prevM.billableHours / prevEngContractWorkH) * 100 : 0;
+                const countDelta = m.count - prevM.count;
+                const utilDelta = utilPctEng - prevUtil;
+                compareText = `${countDelta >= 0 ? '+' : ''}${countDelta}건 / ${utilDelta >= 0 ? '+' : ''}${utilDelta.toFixed(1)}%p`;
+                compareBadge = utilDelta > 2 || countDelta > 0 ? 'low' : utilDelta < -2 || countDelta < 0 ? 'high' : 'mid';
+            }
+            scHtml += `<tr><td>${safeInlineText(name)}</td><td><span class="sc-dept" style="background:${deptColorInfo.bg};color:${deptColorInfo.color}">${safeInlineText(m.dept)}</span></td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${daysActive}</td><td>${perDay}</td><td>${m.custs.size}</td><td>${m.prods.size}</td><td>${billH.toFixed(1)}h</td><td>${workH}h</td><td><span class="sc-badge ${utilBadge}">${utilPctEng.toFixed(1)}%</span></td><td><span class="sc-badge ${compareBadge}">${safeInlineText(compareText)}</span></td><td><span class="sc-badge ${intBadge}">${intLabel} (${intensity.toFixed(1)}h/일)</span></td></tr>`;
         });
         scHtml += '</tbody></table>';
         document.getElementById('engScorecard').innerHTML = scHtml;
@@ -2529,7 +2863,7 @@
             const t = String(r['지원유형'] || '').trim();
             if (!p || !t) return;
             if (!prodCatMap[p]) prodCatMap[p] = {};
-            const cat = typeCategoryOf(t);
+            const cat = r._typeCategory || typeCategoryOf(t);
             prodCatMap[p][cat] = (prodCatMap[p][cat] || 0) + 1;
         });
         upsertChart('chartProdTypeComp', stackedBarConfig(
@@ -2596,7 +2930,7 @@
             }).filter(Boolean).join(' / ') || '-';
             const depRisk = m.engs.size <= 1 ? 'high' : m.engs.size <= 2 ? 'mid' : 'low';
             const depLabel = m.engs.size <= 1 ? '⚠ 단일' : m.engs.size <= 2 ? '주의' : '양호';
-            pscHtml += `<tr><td>${name}</td><td>${grp}</td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${m.custs.size}</td><td>${m.engs.size}명</td><td style="font-size:10px;white-space:nowrap">${deptRatioStr}</td><td><span class="sc-badge ${depRisk}">${depLabel} (${m.engs.size}명)</span></td></tr>`;
+            pscHtml += `<tr><td>${safeInlineText(name)}</td><td>${safeInlineText(grp)}</td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${m.custs.size}</td><td>${m.engs.size}명</td><td style="font-size:10px;white-space:nowrap">${safeInlineText(deptRatioStr)}</td><td><span class="sc-badge ${depRisk}">${depLabel} (${m.engs.size}명)</span></td></tr>`;
         });
         pscHtml += '</tbody></table>';
         document.getElementById('prodScorecard').innerHTML = pscHtml;
@@ -2622,17 +2956,17 @@
             const t = String(r['지원유형'] || '').trim();
             if (!t) return;
             typeCounts[t] = (typeCounts[t] || 0) + 1;
-            const h = calcHours(r);
+            const h = Number(r._hoursNum) || 0;
             typeHours[t] = (typeHours[t] || 0) + h;
             totalHoursAll += h;
             const eng = String(r['엔지니어'] || '').trim();
             if (eng) { if (!typeEngs[t]) typeEngs[t] = new Set(); typeEngs[t].add(eng); }
             const cust = String(r['고객사명'] || '').trim();
             if (cust) { if (!typeCusts[t]) typeCusts[t] = new Set(); typeCusts[t].add(cust); }
-            if (isInternal(t)) totalInternal++; else totalExternal++;
-            const vt = visitTypeOf(t);
+            if (r._isInternal) totalInternal++; else totalExternal++;
+            const vt = r._visitType || visitTypeOf(t);
             if (vt === '방문') totalVisit++; else if (vt === '원격') totalRemote++; else totalOther++;
-            const cat = typeCategoryOf(t);
+            const cat = r._typeCategory || typeCategoryOf(t);
             catCounts[cat] = (catCounts[cat] || 0) + 1;
             if (r._dateStr) {
                 if (!catDates[cat]) catDates[cat] = {};
@@ -2721,7 +3055,7 @@
             const dept = String(r['부서명'] || '').trim();
             const t = String(r['지원유형'] || '').trim();
             if (!dept || !t) return;
-            const cat = typeCategoryOf(t);
+            const cat = r._typeCategory || typeCategoryOf(t);
             if (!deptCatMap[dept]) deptCatMap[dept] = {};
             deptCatMap[dept][cat] = (deptCatMap[dept][cat] || 0) + 1;
         });
@@ -2778,7 +3112,7 @@
             const engCnt = typeEngs[name] ? typeEngs[name].size : 0;
             const custCnt = typeCusts[name] ? typeCusts[name].size : 0;
             const vrBadge = vr === '방문' ? 'high' : vr === '원격' ? 'mid' : 'low';
-            tscHtml += `<tr><td>${name}</td><td>${cat}</td><td><span class="sc-badge ${vrBadge}">${vr}</span></td><td><strong>${cnt}</strong></td><td>${pct}%</td><td>${hrs.toFixed(1)}</td><td>${perCase}h</td><td>${engCnt}명</td><td>${custCnt}곳</td></tr>`;
+            tscHtml += `<tr><td>${safeInlineText(name)}</td><td>${safeInlineText(cat)}</td><td><span class="sc-badge ${vrBadge}">${safeInlineText(vr)}</span></td><td><strong>${cnt}</strong></td><td>${pct}%</td><td>${hrs.toFixed(1)}</td><td>${perCase}h</td><td>${engCnt}명</td><td>${custCnt}곳</td></tr>`;
         });
         tscHtml += '</tbody></table>';
         document.getElementById('typeScorecard').innerHTML = tscHtml;
@@ -2789,6 +3123,7 @@
        ============================================================ */
     function updateCustomerTab() {
         const data = filteredData;
+        const compareContext = getComparablePeriodContext();
         const custMap = aggregateCustomers(data);
         const custEntries = Object.entries(custMap).sort((a, b) => b[1].count - a[1].count);
 
@@ -2798,20 +3133,22 @@
             return;
         }
 
-        // === KPI 미니 ===
-        const singleEngCust = custEntries.filter(e => e[1].engs.size === 1).length;
+        const prevCustMap = aggregateCustomers(compareContext.previousData);
+        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, custMap: custMap });
+        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, custMap: prevCustMap });
+        const customerTransition = summarizeEntityTransition(currentSummary.customerSet, previousSummary.customerSet);
         const multiProdCust = custEntries.filter(e => e[1].prods.size >= 2).length;
-        const totalCustH = custEntries.reduce((s, e) => s + e[1].hours, 0);
         const topCust = custEntries[0];
+
         document.getElementById('custKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">지원 고객사</div><div class="kpi-mini-value">${custEntries.length}</div><div class="kpi-mini-sub">곳</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalCustH.toFixed(0)}</div><div class="kpi-mini-sub">시간(h)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">⚠ 단일엔지니어 고객</div><div class="kpi-mini-value">${singleEngCust}</div><div class="kpi-mini-sub">곳 (인력 리스크)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">멀티제품 고객</div><div class="kpi-mini-value">${multiProdCust}</div><div class="kpi-mini-sub">곳 (2종 이상)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">최다 지원 고객</div><div class="kpi-mini-value">${topCust[0]}</div><div class="kpi-mini-sub">${topCust[1].count}건, ${topCust[1].hours.toFixed(0)}h</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">지원 고객사</div><div class="kpi-mini-value">${currentSummary.activeCustomerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeCustomerCount, previousSummary.activeCustomerCount, { decimals: 0, unit: '곳' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">반복 고객 비율</div><div class="kpi-mini-value">${customerTransition.retainedRatio.toFixed(1)}%</div><div class="kpi-mini-sub">직전에도 지원 ${customerTransition.retainedCount}곳</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">신규 고객</div><div class="kpi-mini-value">${customerTransition.newCount}</div><div class="kpi-mini-sub">전체의 ${customerTransition.newRatio.toFixed(1)}%</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">단일엔지니어 의존</div><div class="kpi-mini-value">${currentSummary.singleEngineerCustomerRatio.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.singleEngineerCustomerRatio, previousSummary.singleEngineerCustomerRatio, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">Top3 고객 집중도</div><div class="kpi-mini-value">${currentSummary.top3CustomerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3CustomerShare, previousSummary.top3CustomerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">고객당 평균 엔지니어</div><div class="kpi-mini-value">${currentSummary.avgEngineersPerCustomer.toFixed(1)}</div><div class="kpi-mini-sub">멀티제품 고객 ${multiProdCust}곳 · 최다 ${safeInlineText(topCust[0])}</div></div>
             `;
 
-        // ① 세그멘테이션 버블: X=건수, Y=제품수, R=엔지니어수
         const topBubble = custEntries.slice(0, 20);
         const bubbleData = topBubble.map((e, i) => ({
             label: e[0],
@@ -2834,7 +3171,6 @@
             }
         });
 
-        // ② Top 15 지원유형 구성 스택바
         const top15 = custEntries.slice(0, 15);
         const catNames = ['기술지원', '점검지원', 'Presales', '내부업무', '셀프스터디', '교육', '기타'];
         const catColors2 = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#9CA3AF'];
@@ -2844,7 +3180,7 @@
             const t = String(r['지원유형'] || '').trim();
             if (!c || !t) return;
             if (!custCatMap[c]) custCatMap[c] = {};
-            const cat = typeCategoryOf(t);
+            const cat = r._typeCategory || typeCategoryOf(t);
             custCatMap[c][cat] = (custCatMap[c][cat] || 0) + 1;
         });
         const top15Names = top15.map(e => e[0]);
@@ -2857,7 +3193,6 @@
             true, '건수', '고객사'
         ));
 
-        // ③ Top 15 건수 vs 투입시간 이중축 차트
         upsertChart('chartCustEfficiency', {
             type: 'bar',
             data: {
@@ -2881,7 +3216,6 @@
             }
         });
 
-        // ④ Top 5 추이
         const custDaily = aggregateByKeyAndDate(data, '고객사명');
         const allDates = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
         const top5 = custEntries.slice(0, 5).map(e => e[0]);
@@ -2894,7 +3228,6 @@
             '건수', '날짜'
         ));
 
-        // ⑤ 담당영업별 지원 현황 (건수 + 고객사수 Grouped Bar)
         const salesMap = {};
         data.forEach(r => {
             const s = String(r['담당영업'] || '').trim();
@@ -2902,7 +3235,7 @@
             if (!s) return;
             if (!salesMap[s]) salesMap[s] = { count: 0, custs: new Set(), hours: 0 };
             salesMap[s].count++;
-            salesMap[s].hours += calcHours(r);
+            salesMap[s].hours += Number(r._hoursNum) || 0;
             if (c) salesMap[s].custs.add(c);
         });
         const salesEntries = Object.entries(salesMap).sort((a, b) => b[1].count - a[1].count);
@@ -2919,7 +3252,7 @@
                 responsive: true, maintainAspectRatio: false, indexAxis: 'y',
                 plugins: {
                     legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, pointStyle: 'circle' } },
-                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const sName = salesEntries[idx][0]; const sm = salesEntries[idx][1]; return `총 시간: ${sm.hours.toFixed(1)}h`; } } }
+                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const sm = salesEntries[idx][1]; return `총 시간: ${sm.hours.toFixed(1)}h`; } } }
                 },
                 scales: {
                     y: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '담당영업', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
@@ -2929,7 +3262,6 @@
             }
         });
 
-        // ⑥ 엔지니어 투입수 (리스크 분석) - 색상으로 리스크 표시
         const top20 = custEntries.slice(0, 20);
         const riskColors = top20.map(e => {
             const n = e[1].engs.size;
@@ -2941,7 +3273,6 @@
             '투입 엔지니어 수', riskColors, true, '엔지니어 수(명)', '고객사'
         ));
 
-        // ⑦ 히트맵: 주요 고객사 × 제품
         const allProdsForCust = [...new Set(data.map(r => String(r['제품명'] || '').trim()).filter(Boolean))];
         const custProdX = crossTab(data, '고객사명', '제품명');
         let maxCH = 0;
@@ -2949,15 +3280,26 @@
         const chMatrix = top20Names.map(c => allProdsForCust.map(p => { const v = (custProdX[c] || {})[p] || 0; if (v > maxCH) maxCH = v; return v; }));
         document.getElementById('custHeatmap').innerHTML = buildHeatmapHTML(top20Names, allProdsForCust, chMatrix, maxCH);
 
-        // ⑧ 고객사 종합 현황 테이블 (확장: 건당시간, 주요제품 추가)
-        let cscHtml = '<table class="scorecard-table"><thead><tr><th>고객사</th><th>건수</th><th>시간(h)</th><th>건당시간</th><th>제품</th><th>엔지니어</th><th>담당영업</th><th>인력 리스크</th></tr></thead><tbody>';
+        let cscHtml = '<table class="scorecard-table"><thead><tr><th>고객사</th><th>건수</th><th>비중</th><th>시간(h)</th><th>건당시간</th><th>제품</th><th>엔지니어</th><th>담당영업</th><th>고객 상태</th><th>직전 대비</th><th>인력 리스크</th></tr></thead><tbody>';
         custEntries.slice(0, 30).forEach(([name, m]) => {
             const risk = m.engs.size <= 1 ? 'high' : m.engs.size <= 2 ? 'mid' : 'low';
-            const riskLabel = m.engs.size <= 1 ? '⚠ 위험' : m.engs.size <= 2 ? '주의' : '양호';
+            const riskLabel = m.engs.size <= 1 ? '위험' : m.engs.size <= 2 ? '주의' : '양호';
             const prodsStr = [...m.prods].slice(0, 3).join(', ') + (m.prods.size > 3 ? ` +${m.prods.size - 3}` : '');
             const salesStr = [...m.sales].join(', ');
             const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
-            cscHtml += `<tr><td>${name}</td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td title="${[...m.prods].join(', ')}">${prodsStr}</td><td>${m.engs.size}명</td><td>${salesStr}</td><td><span class="sc-badge ${risk}">${riskLabel}</span></td></tr>`;
+            const share = currentSummary.dataCount > 0 ? ((m.count / currentSummary.dataCount) * 100) : 0;
+            const prevM = prevCustMap[name] || null;
+            const lifecycleLabel = prevM ? '반복' : (compareContext.previousData.length ? '신규' : '비교없음');
+            const lifecycleBadge = prevM ? 'low' : 'mid';
+            let compareText = compareContext.previousData.length ? '신규' : '비교없음';
+            let compareBadge = compareContext.previousData.length ? 'mid' : 'low';
+            if (prevM) {
+                const countDelta = m.count - prevM.count;
+                const hoursDelta = m.hours - prevM.hours;
+                compareText = `${countDelta >= 0 ? '+' : ''}${countDelta}건 / ${hoursDelta >= 0 ? '+' : ''}${hoursDelta.toFixed(1)}h`;
+                compareBadge = countDelta > 0 || hoursDelta > 0 ? 'low' : countDelta < 0 || hoursDelta < 0 ? 'high' : 'mid';
+            }
+            cscHtml += `<tr><td>${safeInlineText(name)}</td><td><strong>${m.count}</strong></td><td>${share.toFixed(1)}%</td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td title="${escapeAttr([...m.prods].join(', '))}">${safeInlineText(prodsStr)}</td><td>${m.engs.size}명</td><td>${safeInlineText(salesStr)}</td><td><span class="sc-badge ${lifecycleBadge}">${safeInlineText(lifecycleLabel)}</span></td><td><span class="sc-badge ${compareBadge}">${safeInlineText(compareText)}</span></td><td><span class="sc-badge ${risk}">${riskLabel}</span></td></tr>`;
         });
         cscHtml += '</tbody></table>';
         document.getElementById('custScorecard').innerHTML = cscHtml;
@@ -2993,7 +3335,7 @@
                 <div class="kpi-mini"><div class="kpi-mini-label">총 지원 건수</div><div class="kpi-mini-value">${data.length}</div><div class="kpi-mini-sub">건</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalSalesH.toFixed(0)}</div><div class="kpi-mini-sub">시간(h)</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">인당 평균 고객사</div><div class="kpi-mini-value">${avgCustPerSales}</div><div class="kpi-mini-sub">곳 / 인</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">최다 고객사 담당</div><div class="kpi-mini-value">${topSales[0]}</div><div class="kpi-mini-sub">${topSales[1].custs.size}곳, ${topSales[1].count}건</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">최다 고객사 담당</div><div class="kpi-mini-value">${safeInlineText(topSales[0])}</div><div class="kpi-mini-sub">${topSales[1].custs.size}곳, ${topSales[1].count}건</div></div>
             `;
 
         // ① 포트폴리오 버블: X=고객사수, Y=건수, R=제품수
@@ -3052,7 +3394,7 @@
             const t = String(data[i]['지원유형'] || '').trim();
             if (!s || !t) continue;
             if (!salesCatMap[s]) salesCatMap[s] = {};
-            const cat = typeCategoryOf(t);
+            const cat = data[i]._typeCategory || typeCategoryOf(t);
             salesCatMap[s][cat] = (salesCatMap[s][cat] || 0) + 1;
         }
         upsertChart('chartSalesTypeComp', stackedBarConfig(
@@ -3120,7 +3462,7 @@
             const pct = totalAll > 0 ? ((m.count / totalAll) * 100).toFixed(1) : 0;
             const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
             scHtml += `<tr>
-                    <td><strong>${name}</strong></td>
+                    <td><strong>${safeInlineText(name)}</strong></td>
                     <td>${m.custs.size}곳</td>
                     <td><strong>${m.count}</strong></td>
                     <td>${pct}%</td>
@@ -3140,7 +3482,40 @@
         applyTableSearchAndRender();
     }
 
-    /** 테이블 검색 및 렌더링 */
+    function getTableSortValue(row, col) {
+        const type = TABLE_COLUMN_TYPES[col] || 'text';
+        if (type === 'number') {
+            if (col === '작업시간(h)') return Number(row._hoursNum) || 0;
+            return parseMetricValue(row[col]);
+        }
+        if (type === 'date') {
+            if (col === '작업시작일시') return row._date instanceof Date ? row._date.getTime() : Number.NEGATIVE_INFINITY;
+            if (col === '작업종료일시') return row._endDate instanceof Date ? row._endDate.getTime() : Number.NEGATIVE_INFINITY;
+            const parsed = parseDate(row[col]);
+            return parsed instanceof Date ? parsed.getTime() : Number.NEGATIVE_INFINITY;
+        }
+        return String(row[col] || '').toLowerCase();
+    }
+
+    function compareTableRows(a, b, col, dir) {
+        const type = TABLE_COLUMN_TYPES[col] || 'text';
+        const va = getTableSortValue(a, col);
+        const vb = getTableSortValue(b, col);
+
+        if (type === 'text') {
+            return String(a[col] || '').localeCompare(String(b[col] || ''), 'ko') * dir;
+        }
+
+        const aInvalid = !Number.isFinite(va);
+        const bInvalid = !Number.isFinite(vb);
+        if (aInvalid && bInvalid) return 0;
+        if (aInvalid) return 1;
+        if (bInvalid) return -1;
+        if (va === vb) return 0;
+        return (va > vb ? 1 : -1) * dir;
+    }
+
+    /** Table search and render */
     function applyTableSearchAndRender() {
         const query = tableState.search.toLowerCase().trim();
 
@@ -3161,21 +3536,16 @@
             tableState.searchData = filteredData;
         }
 
-        // 정렬 적용
         if (tableState.sortCol !== null) {
             const col = TABLE_COLUMNS[tableState.sortCol];
             const dir = tableState.sortDir === 'asc' ? 1 : -1;
-            tableState.searchData = [...tableState.searchData].sort((a, b) => {
-                const va = String(a[col] || '');
-                const vb = String(b[col] || '');
-                return va.localeCompare(vb, 'ko') * dir;
-            });
+            tableState.searchData = [...tableState.searchData].sort((a, b) => compareTableRows(a, b, col, dir));
         }
 
         renderTable();
     }
 
-    /** 테이블 렌더링 (페이지네이션 포함) */
+    /** Table render with pagination */
     function renderTable() {
         const data = tableState.searchData;
         const perPage = tableState.perPage;
@@ -3186,19 +3556,16 @@
         const end = Math.min(start + perPage, data.length);
         const pageData = data.slice(start, end);
 
-        // 정보 표시
         document.getElementById('tableInfo').textContent =
             `총 ${formatNum(filteredData.length)}건 중 ${formatNum(data.length)}건 검색됨 │ ${formatNum(start + 1)}~${formatNum(end)} 표시`;
 
-        // 헤더 생성 (정렬 포함)
         const thead = document.getElementById('dataTableHead');
         thead.innerHTML = TABLE_COLUMNS.map((col, i) => {
             const isSorted = tableState.sortCol === i;
-            const icon = isSorted ? (tableState.sortDir === 'asc' ? '▲' : '▼') : '↕';
-            return `<th class="${isSorted ? 'sorted' : ''}" onclick="sortTable(${i})">${col} <span class="sort-icon">${icon}</span></th>`;
+            const icon = isSorted ? (tableState.sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
+            return `<th class="${isSorted ? 'sorted' : ''}" onclick="sortTable(${i})">${safeInlineText(col)} <span class="sort-icon">${icon}</span></th>`;
         }).join('');
 
-        // 본문 생성
         const tbody = document.getElementById('dataTableBody');
         if (pageData.length === 0) {
             tbody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS.length}" style="text-align:center;padding:40px;color:var(--gray-400);">
@@ -3213,18 +3580,16 @@
                     const val = String(pageData[i][col] || '');
                     const cls = col === '지원내역' ? ' class="td-detail"' : '';
                     const displayVal = val.length > 100 ? val.substring(0, 100) + '...' : val;
-                    html += `<td${cls} title="${val.replace(/"/g, '&quot;').replace(/\r?\n/g, ' ')}">${displayVal.replace(/\r?\n/g, '<br>')}</td>`;
+                    html += `<td${cls} title="${escapeAttr(val)}">${escapeHtml(displayVal).replace(/\r?\n/g, '<br>')}</td>`;
                 });
                 html += '</tr>';
             }
             tbody.innerHTML = html;
         }
 
-        // 페이지네이션
         renderPagination(totalPages, page);
     }
 
-    /** 페이지네이션 렌더링 */
     function renderPagination(totalPages, currentPage) {
         const el = document.getElementById('pagination');
         if (totalPages <= 1) { el.innerHTML = ''; return; }
@@ -3299,8 +3664,13 @@
         compensationEntries = [];
         activeFilterFromDate = null;
         activeFilterToDate = null;
+        comparisonMode = 'previous_period';
+        updateComparisonModeControl();
         loadedFiles = [];
         drilldownState = {};
+        destroyDatePickers();
+        resetFilteredComputationCache();
+        resetComparablePeriodCache();
         resetDeptColors(); // 부서 색상 캐시 초기화
         const banner = document.getElementById('drilldownBanner');
         if (banner) banner.remove();
@@ -3421,6 +3791,22 @@
             tableState.page = 1;
             renderTable();
         });
+
+        const comparisonModeEl = document.getElementById('comparisonMode');
+        if (comparisonModeEl) {
+            updateComparisonModeControl();
+            comparisonModeEl.addEventListener('change', function () {
+                const nextMode = normalizeComparisonMode(this.value);
+                if (comparisonMode === nextMode) return;
+                comparisonMode = nextMode;
+                resetComparablePeriodCache();
+                if (rawData.length) {
+                    applyAllFilters();
+                } else {
+                    updateFilterSummary('', '');
+                }
+            });
+        }
     }
 
     // DOM 준비 후 초기화
