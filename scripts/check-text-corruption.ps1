@@ -15,6 +15,7 @@ function Test-TargetFile {
 
 $replacementChar = [string][char]0xFFFD
 $mojibakePattern = '[\u4E00-\u9FFF\uF900-\uFAFF][^\r\n]*\?|[?][^\r\n]*[\u4E00-\u9FFF\uF900-\uFAFF]|[\u3131-\u318E\u1100-\u11FF][^\r\n]*\?|[?][^\r\n]*[\u3131-\u318E\u1100-\u11FF]'
+$suspiciousCjkPattern = '[\u4E00-\u9FFF\uF900-\uFAFF]'
 $doubleQuestionPattern = '(?<![?:])\?\?(?![?:])'
 
 Get-ChildItem -Path $root -Recurse -File | Where-Object {
@@ -30,6 +31,9 @@ Get-ChildItem -Path $root -Recurse -File | Where-Object {
         }
         if ($line -match $mojibakePattern) {
             $issues.Add("SUSPECTED MOJIBAKE: ${filePath}:${lineNo}")
+        }
+        if ($line -match $suspiciousCjkPattern) {
+            $issues.Add("SUSPICIOUS CJK CHAR: ${filePath}:${lineNo}")
         }
         if ($line -match $doubleQuestionPattern -and $line -notmatch 'https?://') {
             $issues.Add("DOUBLE QUESTION MARK: ${filePath}:${lineNo}")
