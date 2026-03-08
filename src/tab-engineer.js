@@ -24,7 +24,10 @@
             crossTab,
             buildHeatmapHTML,
             stackedBarConfig,
-            lineChartConfig
+            lineChartConfig,
+            getCompensationTopEngineers,
+            getActiveFilterFromDate,
+            getActiveFilterToDate
         } = deps;
 
     function updateEngineerTab() {
@@ -46,14 +49,15 @@
         const engineerTransition = summarizeEntityTransition(currentSummary.engineerSet, previousSummary.engineerSet);
         const engContractWorkH = currentSummary.contractHoursPerEngineer;
         const prevEngContractWorkH = previousSummary.contractHoursPerEngineer;
+        const topCompensation = getCompensationTopEngineers(getActiveFilterFromDate(), getActiveFilterToDate(), 1).list[0] || null;
 
         document.getElementById('engKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">활동 엔지니어</div><div class="kpi-mini-value">${currentSummary.activeEngineerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '명' })} · 유지 ${engineerTransition.retainedCount}명</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">평균 가동률</div><div class="kpi-mini-value" style="color:${utilColor(currentSummary.avgUtilPct)}">${currentSummary.avgUtilPct.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">목표 가동 달성</div><div class="kpi-mini-value">${currentSummary.overTargetEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.overTargetEngineers, previousSummary.overTargetEngineers, { decimals: 0, unit: '명' })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">저가동 위험</div><div class="kpi-mini-value">${currentSummary.underDangerEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.underDangerEngineers, previousSummary.underDangerEngineers, { decimals: 0, unit: '명', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">업무 집중도</div><div class="kpi-mini-value">${currentSummary.top3EngineerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3EngineerShare, previousSummary.top3EngineerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">엔지니어 최고 가동률</div><div class="kpi-mini-value" style="color:${utilColor(currentSummary.maxUtilPct)}">${currentSummary.maxUtilPct.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.maxUtilPct, previousSummary.maxUtilPct, { decimals: 1, mode: 'pp' })} · ${safeInlineText((currentSummary.topUtilEngineer && currentSummary.topUtilEngineer.name) || '데이터 없음')}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\ucd1d \uc5d4\uc9c0\ub2c8\uc5b4</div><div class="kpi-mini-value">${currentSummary.activeEngineerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '\uba85' })} \u00b7 \uc720\uc9c0 ${engineerTransition.retainedCount}\uba85</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\ucd1d \ud22c\uc785\uc2dc\uac04</div><div class="kpi-mini-value">${currentSummary.totalHours.toFixed(1)}h</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.totalHours, previousSummary.totalHours, { decimals: 1, unit: 'h' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\ud3c9\uade0 \uac00\ub3d9\ub960</div><div class="kpi-mini-value" style="color:${utilColor(currentSummary.avgUtilPct)}">${currentSummary.avgUtilPct.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\uc678\ubd80\uc9c0\uc6d0 \ube44\uc728</div><div class="kpi-mini-value">${currentSummary.externalSupportRatio.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.externalSupportRatio, previousSummary.externalSupportRatio, { decimals: 1, mode: 'pp' })}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\uace0\uac1d\uc9c0\uc6d0 \ucd5c\ub2e4\ud65c\ub3d9</div><div class="kpi-mini-value">${safeInlineText((currentSummary.topEngineer && `\uD83D\uDC4D ${currentSummary.topEngineer[0]}`) || '\ub370\uc774\ud130 \uc5c6\uc74c')}</div><div class="kpi-mini-sub">${currentSummary.topEngineer ? `\uc9c0\uc6d0\uac74\uc218 ${currentSummary.topEngineer[1].billableCount}\uac74, \uc9c0\uc6d0\uc2dc\uac04 ${currentSummary.topEngineer[1].billableHours.toFixed(1)}h` : '\ub370\uc774\ud130 \uc5c6\uc74c'}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">\ubcf4\uc0c1\ud734\uac00 \ucd5c\ub2e4\ubc1c\uc0dd</div><div class="kpi-mini-value">${safeInlineText((topCompensation && `\uD83D\uDE2B ${topCompensation.engineer}`) || '\ub370\uc774\ud130 \uc5c6\uc74c')}</div><div class="kpi-mini-sub">${topCompensation ? `\ubcf4\uc0c1\ud734\uac00 \ubc1c\uc0dd\uc2dc\uac04 ${topCompensation.compensationHours.toFixed(1)}h` : '\ub370\uc774\ud130 \uc5c6\uc74c'}</div></div>
             `;
 
         const bubbleData = engEntries.map((e, i) => ({

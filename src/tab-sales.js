@@ -40,7 +40,7 @@
                 <div class="kpi-mini"><div class="kpi-mini-label">총 지원 건수</div><div class="kpi-mini-value">${data.length}</div><div class="kpi-mini-sub">건</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalSalesH.toFixed(0)}</div><div class="kpi-mini-sub">시간(h)</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">인당 평균 고객사</div><div class="kpi-mini-value">${avgCustPerSales}</div><div class="kpi-mini-sub">곳 / 인</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">최다 고객사 담당</div><div class="kpi-mini-value">${safeInlineText(topSales[0])}</div><div class="kpi-mini-sub">${topSales[1].custs.size}곳, ${topSales[1].count}건</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">최다 고객사 담당</div><div class="kpi-mini-value">${safeInlineText(`\uD83D\uDC4D ${topSales[0]}`)}</div><div class="kpi-mini-sub">${topSales[1].custs.size}곳, ${topSales[1].count}건</div></div>
             `;
 
         // ① 포트폴리오 버블: X=고객사수, Y=건수, R=제품수

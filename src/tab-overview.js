@@ -350,23 +350,26 @@
             if (!topUtil || util > topUtil.util) topUtil = utilEntry;
         }
         const avgUtil = totalWorkH > 0 ? (totalBillH / totalWorkH) * 100 : 0;
-        const compensation = compSummary && compSummary.list ? compSummary : { list: [], top: [], total: 0 };
+        const compensation = compSummary && Array.isArray(compSummary.list) ? compSummary : { list: [], total: 0, count: 0 };
 
-        // A0: 총 보상발생시간 Top 3 집중도
-        if (compensation.top && compensation.top.length >= 1) {
-            const top3 = compensation.top.slice(0, 3);
-            const top3Sum = top3.reduce((s, e) => s + e[1], 0);
+        // A0: \ucd1d \ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04 Top 3 \uc778\uc0ac\uc774\ud2b8
+        if (compensation.list.length >= 1) {
+            const top3 = compensation.list.slice(0, 3);
+            const top3Sum = top3.reduce((sum, entry) => sum + entry.compensationHours, 0);
             const totalComp = compensation.total || 0;
-            const avgComp = compensation.list.length ? totalComp / compensation.list.length : 0;
-            const top1 = top3[0][1];
-            const top1Ratio = avgComp > 0 ? (top1 / avgComp) : 0;
+            const avgComp = compensation.count ? totalComp / compensation.count : 0;
+            const top1 = top3[0];
+            const top1Ratio = avgComp > 0 ? (top1.compensationHours / avgComp) : 0;
             const topShare = totalComp > 0 ? (top3Sum / totalComp) * 100 : 0;
-            const top3Names = top3.map((e, idx) => `${idx + 1}. ${e[0]} (${e[1].toFixed(1)}h)`).join(', ');
-            const type = top1Ratio >= 2 ? 'danger' : top1Ratio >= 1.5 ? 'warning' : 'info';
-            const typeLabel = type === 'danger' ? '보상시간 편중 위험' : type === 'warning' ? '보상시간 편중 주의' : '보상시간 편중 확인';
-            const desc = `근무-보상시간 통계 기준 상위 ${top3.length}인의 총 보상발생시간이 전체의 ${top3Sum.toFixed(1)}h (${topShare.toFixed(0)}%)입니다. ${top3Names}. ` +
-                `상위 1인 집중도는 팀 평균 대비 ${top1Ratio.toFixed(1)}배로, 인력별 보상 편중 관리가 필요합니다.`;
-            if (!pushInsight({ type, icon: '💰', label: '총 보상발생시간', title: `${typeLabel} — Top 3이 ${topShare.toFixed(0)}% 집중`, desc })) return insights;
+            const top3Names = top3.map((entry, idx) => `${idx + 1}. ${entry.engineer} (${entry.compensationHours.toFixed(1)}h)`).join(', ');
+            const type = topShare >= 70 || top1Ratio >= 2 ? 'danger' : topShare >= 50 || top1Ratio >= 1.5 ? 'warning' : 'info';
+            const extraInsight = topShare >= 70
+                ? '\uc0c1\uc704 3\uc778 \ud3b8\uc911\uc774 \ub9e4\uc6b0 \ub192\uc2b5\ub2c8\ub2e4. \ub300\uccb4 \uc778\ub825\uacfc \uc5c5\ubb34 \ubd84\uc0b0\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.'
+                : topShare >= 50
+                    ? '\ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04\uc774 \uc77c\ubd80 \uc778\ub825\uc5d0 \uc9d1\uc911\ub418\ub294 \uacbd\ud5a5\uc774 \uc788\uc2b5\ub2c8\ub2e4.'
+                    : '\ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04 \ubd84\ud3ec\ub294 \ube44\uad50\uc801 \uc548\uc815\uc801\uc774\uc9c0\ub9cc \uc0c1\uc704 \uc778\ub825 \ucd94\uc774\ub294 \uacc4\uc18d \ubaa8\ub2c8\ud130\ub9c1\uc774 \ud544\uc694\ud569\ub2c8\ub2e4.';
+            const desc = `Top 3: ${top3Names}. \uc804\uccb4 \ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04 ${totalComp.toFixed(1)}h \uc911 ${top3Sum.toFixed(1)}h (${topShare.toFixed(0)}%)\uac00 \uc0c1\uc704 3\uc778\uc5d0 \uc9d1\uc911\ub418\uc5b4 \uc788\uc2b5\ub2c8\ub2e4. 1\uc704 ${top1.engineer}\ub294 ${top1.compensationHours.toFixed(1)}h\ub85c \uc804\uccb4 \uc5d4\uc9c0\ub2c8\uc5b4 \ud3c9\uade0 \ub300\ube44 ${top1Ratio.toFixed(1)}\ubc30\uc785\ub2c8\ub2e4. ${extraInsight}`;
+            if (!pushInsight({ type, icon: '\ud83d\udcb0', label: '\ucd1d \ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04', title: `${top1.engineer} \uc911\uc2ec Top 3 \ubcf4\uc0c1\ubc1c\uc0dd\uc2dc\uac04`, desc })) return insights;
         }
 
         // 1~3: 전체 가동률

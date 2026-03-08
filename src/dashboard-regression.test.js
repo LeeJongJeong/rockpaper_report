@@ -100,6 +100,54 @@ function createAnalyticsCoreForComparisonTest() {
     };
 }
 
+function createAnalyticsCoreForCompensationFilterTest() {
+    const compensationEntries = [
+        { engineer: 'A', dept: 'PS', compensationHours: 4, periodStart: new Date('2026-03-01T00:00:00'), periodEnd: new Date('2026-03-31T00:00:00') },
+        { engineer: 'B', dept: 'IS', compensationHours: 12, periodStart: new Date('2026-03-01T00:00:00'), periodEnd: new Date('2026-03-31T00:00:00') },
+        { engineer: 'C', dept: 'PS', compensationHours: 8, periodStart: new Date('2026-03-01T00:00:00'), periodEnd: new Date('2026-03-31T00:00:00') },
+        { engineer: 'D', dept: 'PS', compensationHours: 20, periodStart: new Date('2026-02-01T00:00:00'), periodEnd: new Date('2026-02-28T00:00:00') },
+        { engineer: 'C', dept: 'PS', compensationHours: 30, periodStart: null, periodEnd: null }
+    ];
+    const filterState = {
+        '\uBD80\uC11C\uBA85': { options: ['PS', 'IS'], selected: new Set(['PS']) },
+        '\uC5D4\uC9C0\uB2C8\uC5B4': { options: ['A', 'B', 'C'], selected: new Set(['A', 'C']) },
+        '\uACE0\uAC1D\uC0AC\uBA85': { options: ['X', 'Y'], selected: new Set(['X']) }
+    };
+    const context = createVmContext();
+    loadBrowserScript('analytics-core.js', context);
+    return context.window.DASH_ANALYTICS_CORE.createAnalyticsCore({
+        CONFIG: {},
+        FILTER_COLUMNS: [
+            { key: '\uBD80\uC11C\uBA85', label: '\uBD80\uC11C' },
+            { key: '\uC5D4\uC9C0\uB2C8\uC5B4', label: '\uC5D4\uC9C0\uB2C8\uC5B4' },
+            { key: '\uACE0\uAC1D\uC0AC\uBA85', label: '\uACE0\uAC1D\uC0AC' }
+        ],
+        PRODUCT_GROUP_RULES: [],
+        parseDate: value => new Date(value),
+        formatDateStr: date => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+        getCachedFilteredValue: (_key, producer) => producer(),
+        getContractWorkHours: () => 0,
+        getContractWorkHoursForRange: () => 0,
+        getRawData: () => [],
+        getFilterState: () => filterState,
+        getDateRange: () => ({ min: new Date('2026-03-01T00:00:00'), max: new Date('2026-03-31T00:00:00') }),
+        getActiveFilterFromDate: () => new Date('2026-03-01T00:00:00'),
+        getActiveFilterToDate: () => new Date('2026-03-31T00:00:00'),
+        getCompensationEntries: () => compensationEntries,
+        getComparisonMode: () => 'previous_period',
+        getComparablePeriodCache: () => ({ key: null, value: null }),
+        setComparablePeriodCache() {},
+        normalizeComparisonMode: mode => mode,
+        getComparisonModeLabel: mode => mode,
+        safeInlineText: value => String(value || '')
+    });
+}
+
 function createTableUiForRegressionTest() {
     const tableState = {
         page: 3,
@@ -251,6 +299,68 @@ function testComparablePeriodContext() {
     assertEq(toYmd(previousMonth.previousRange.end), '2026-02-28', 'previous_month end clamps to month end');
 }
 
+function testCompensationTopEngineersRespectsApplicableFilters() {
+    const core = createAnalyticsCoreForCompensationFilterTest();
+    const result = core.getCompensationTopEngineers(new Date('2026-03-01T00:00:00'), new Date('2026-03-31T00:00:00'));
+
+    assertEq(result.list.length, 2, 'compensation top engineers keeps only applicable filtered entries');
+    assertEq(result.list[0].engineer, 'C', 'compensation top engineers respects engineer and department filters');
+    assertEq(result.list[1].engineer, 'A', 'compensation top engineers preserves remaining filtered engineer');
+    assertEq(result.total, 12, 'compensation totals exclude filtered entries with unknown periods when date filters are active');
+    assertEq(result.count, 2, 'compensation count only include filtered entries');
+}
+
+function testBuildAnalyticsSummaryOmitsTopEngineerWhenNoBillableSupport() {
+    const context = createVmContext();
+    loadBrowserScript('analytics-core.js', context);
+    const core = context.window.DASH_ANALYTICS_CORE.createAnalyticsCore({
+        CONFIG: { UTIL: { DANGER: 60, TARGET: 80 } },
+        FILTER_COLUMNS: [],
+        PRODUCT_GROUP_RULES: [],
+        parseDate: value => new Date(value),
+        formatDateStr: date => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        },
+        getCachedFilteredValue: (_key, producer) => producer(),
+        getContractWorkHours: () => 160,
+        getContractWorkHoursForRange: () => 160,
+        getRawData: () => [],
+        getFilterState: () => ({}),
+        getDateRange: () => ({ min: new Date('2026-03-01T00:00:00'), max: new Date('2026-03-02T00:00:00') }),
+        getActiveFilterFromDate: () => new Date('2026-03-01T00:00:00'),
+        getActiveFilterToDate: () => new Date('2026-03-02T00:00:00'),
+        getCompensationEntries: () => [],
+        getComparisonMode: () => 'previous_period',
+        getComparablePeriodCache: () => ({ key: null, value: null }),
+        setComparablePeriodCache() {},
+        normalizeComparisonMode: mode => mode,
+        getComparisonModeLabel: mode => mode,
+        safeInlineText: value => String(value || '')
+    });
+    const engineerKey = '\uC5D4\uC9C0\uB2C8\uC5B4';
+    const deptKey = '\uBD80\uC11C\uBA85';
+    const customerKey = '\uACE0\uAC1D\uC0AC\uBA85';
+    const productKey = '\uC81C\uD488\uBA85';
+    const supportTypeKey = '\uC9C0\uC6D0\uC720\uD615';
+    const internalType = '\uB0B4\uBD80\uC5C5\uBB34';
+    const data = [
+        { [engineerKey]: 'A', [deptKey]: 'PS', [customerKey]: '', [productKey]: 'Alpha', [supportTypeKey]: internalType, _hoursNum: 8, _isBillable: false, _isInternal: true, _dateStr: '2026-03-01' },
+        { [engineerKey]: 'B', [deptKey]: 'IS', [customerKey]: '', [productKey]: 'Beta', [supportTypeKey]: internalType, _hoursNum: 6, _isBillable: false, _isInternal: true, _dateStr: '2026-03-02' }
+    ];
+
+    const summary = core.buildAnalyticsSummary(data, {
+        range: {
+            start: new Date('2026-03-01T00:00:00'),
+            end: new Date('2026-03-02T00:00:00')
+        }
+    });
+
+    assertEq(summary.topEngineer, null, 'buildAnalyticsSummary omits topEngineer when no billable support exists');
+}
+
 function testTableUiResetAndSort() {
     const fixture = createTableUiForRegressionTest();
     fixture.tableUI.resetDetailTableState();
@@ -295,6 +405,8 @@ function testClearAllDrilldownsAppliesOnce() {
 function run() {
     console.log('[dashboard-regression] regression check start');
     testComparablePeriodContext();
+    testCompensationTopEngineersRespectsApplicableFilters();
+    testBuildAnalyticsSummaryOmitsTopEngineerWhenNoBillableSupport();
     testTableUiResetAndSort();
     testClearAllDrilldownsAppliesOnce();
     console.log('[dashboard-regression] PASS');

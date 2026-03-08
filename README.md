@@ -36,6 +36,11 @@ python -m http.server 8000
 
 실행 후 브라우저에서 `http://localhost:8000` 을 엽니다.
 
+### 실행 전제
+
+- 인터넷 연결이 필요합니다. 외부 CDN으로 `xlsx`, `Chart.js`, `flatpickr`, `Font Awesome`을 로드합니다.
+- 오프라인 환경에서는 [index.html](/D:/myhome/rockpaper-report/index.html)의 CDN 스크립트/스타일을 로컬 파일로 교체해야 합니다.
+
 ## 데이터 처리 방식
 
 ### 기본 업로드
@@ -54,6 +59,9 @@ python -m http.server 8000
 - `보상` 관련 시트명
 
 여기서 엔지니어별 보상발생시간을 읽어 인사이트에 반영합니다.
+
+- 기간 필터 연동을 위해 시트 `A1` 에 `YYYY-M-D ~ YYYY-M-D` 형식의 기간 문자열이 있어야 합니다.
+- 기간 문자열을 읽지 못한 보상 엔트리는 날짜 필터가 적용된 KPI/인사이트 집계에서 제외됩니다.
 
 ## 분석 기준
 
@@ -102,12 +110,20 @@ python -m http.server 8000
 - `전월 동일기간`: 한 달 앞당긴 동일 달력 구간
 - `전년 동기`: 1년 앞당긴 동일 달력 구간
 
+### 현재 KPI/인사이트 기준
+
+- `외부지원 비율` = `billable 지원건수 / 현재 필터 결과의 전체 작업건수 × 100`
+- `고객지원 최다활동` = `billable 지원건수`가 가장 많은 엔지니어
+- `보상휴가 최다발생` = 선택 기간과 겹치는 보상발생시간 합계가 가장 큰 엔지니어
+- `Overview` 첫 자동 인사이트 = 보상발생시간 Top 3, 상위 3인 집중도, 1위의 전체 엔지니어 평균 대비 배수를 함께 표시
+
 ## 현재 소스 구조
 
 ### 진입점
 
 - [index.html](/D:/myhome/rockpaper-report/index.html)
 - [src/app.js](/D:/myhome/rockpaper-report/src/app.js)
+- [src/app-state.js](/D:/myhome/rockpaper-report/src/app-state.js)
 
 ### 공통 설정 및 유틸
 
@@ -140,7 +156,8 @@ python -m http.server 8000
 
 ### 모듈 책임 원칙
 
-- `app.js` 는 상태 보관과 모듈 wiring 중심으로 유지
+- `app.js` 는 모듈 wiring과 초기화 진입점 중심으로 유지
+- `app-state.js` 는 전역 상태 저장소 역할을 담당
 - 계산 로직은 `analytics-core.js`
 - 업로드/정규화는 `data-loader.js`
 - DOM 이벤트와 화면 제어는 `filter-ui.js`, `table-ui.js`, `app-shell.js`
@@ -148,20 +165,24 @@ python -m http.server 8000
 
 ### 인코딩 정책
 
-저장소는 UTF-8을 기본 정책으로 사용합니다.
+저장소 텍스트 파일의 기본 정책은 UTF-8입니다.
 
 - [/.editorconfig](/D:/myhome/rockpaper-report/.editorconfig)
 - [/.gitattributes](/D:/myhome/rockpaper-report/.gitattributes)
 
 텍스트 파일은 UTF-8로 유지하고, BOM 없는 UTF-8을 권장합니다.
 
-텍스트 무결성 검사는 아래 스크립트로 수행합니다.
+- `.editorconfig`, `.gitattributes` 는 저장 형식과 Git 처리 기준을 맞추는 용도입니다.
+- 이 설정만으로 모든 편집 경로의 한글 깨짐을 막을 수는 없습니다. 터미널, 스크립트, 복사-붙여넣기 과정에서 인코딩이 틀어지면 저장 전 단계에서 문자가 이미 손상될 수 있습니다.
+- 텍스트 파일을 수정한 뒤에는 아래 무결성 검사를 다시 실행하는 것을 권장합니다.
+
+무결성 검사:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-text-integrity.ps1
 ```
 
-개별 실행이 필요하면 아래 스크립트를 사용합니다.
+개별 검사:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-utf8.ps1
@@ -172,19 +193,30 @@ powershell -ExecutionPolicy Bypass -File scripts/check-text-corruption.ps1
 
 ### 회귀 테스트
 
+현재 회귀 테스트는 비교 기간 계산, 상세 테이블 상태 초기화/정렬, 드릴다운 전체 해제 같은 리팩터링 취약 지점을 우선 검증합니다.
+
 ```powershell
 node src/contract-utils.test.js
+node src/dashboard-regression.test.js
 ```
 
 ### 문법 검사
 
 ```powershell
 node --check src/app.js
+node --check src/app-state.js
 node --check src/app-shell.js
 node --check src/analytics-core.js
 node --check src/data-loader.js
 node --check src/filter-ui.js
 node --check src/table-ui.js
+node --check src/dashboard-ui.js
+node --check src/tab-overview.js
+node --check src/tab-engineer.js
+node --check src/tab-product.js
+node --check src/tab-support.js
+node --check src/tab-customer.js
+node --check src/tab-sales.js
 ```
 
 ## 샘플 파일

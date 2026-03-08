@@ -431,7 +431,10 @@
         crossTab,
         buildHeatmapHTML,
         stackedBarConfig,
-        lineChartConfig
+        lineChartConfig,
+        getCompensationTopEngineers,
+        getActiveFilterFromDate: () => state.activeFilterFromDate,
+        getActiveFilterToDate: () => state.activeFilterToDate
     });
 
     const customerTab = window.DASH_CUSTOMER_TAB.createCustomerTab({

@@ -25,14 +25,34 @@
             safeInlineText
         } = deps;
 
+        function compensationEntryMatchesSelectedFilters(entry) {
+            const filterState = getFilterState();
+            const compensationFilterMap = {
+                '\uC5D4\uC9C0\uB2C8\uC5B4': String(entry.engineer || '').trim(),
+                '\uBD80\uC11C\uBA85': String(entry.dept || '').trim()
+            };
+
+            for (let i = 0; i < FILTER_COLUMNS.length; i++) {
+                const key = FILTER_COLUMNS[i].key;
+                if (!Object.prototype.hasOwnProperty.call(compensationFilterMap, key)) continue;
+                const fs = filterState[key];
+                if (!fs || !fs.selected || !Array.isArray(fs.options) || fs.selected.size === fs.options.length) continue;
+                const value = compensationFilterMap[key];
+                if (!value || !fs.selected.has(value)) return false;
+            }
+
+            return true;
+        }
+
         function getCompensationEntriesForRange(startDate, endDate) {
             const from = startDate || null;
             const to = endDate || null;
             const entries = getCompensationEntries();
             return entries.filter(entry => {
+                if (!compensationEntryMatchesSelectedFilters(entry)) return false;
                 const pStart = entry.periodStart;
                 const pEnd = entry.periodEnd;
-                if (!(pStart instanceof Date) || !(pEnd instanceof Date)) return true;
+                if (!(pStart instanceof Date) || !(pEnd instanceof Date)) return !(from || to);
                 if (from && pEnd < from) return false;
                 if (to && pStart > to) return false;
                 return true;
@@ -41,7 +61,7 @@
 
         function getCompensationTopEngineers(startDate, endDate, topN = 3) {
             const rows = getCompensationEntriesForRange(startDate, endDate);
-            if (!rows.length) return { list: [], total: 0 };
+            if (!rows.length) return { list: [], total: 0, count: 0 };
 
             const totals = {};
             for (let i = 0; i < rows.length; i++) {
@@ -59,7 +79,8 @@
             const total = list.reduce((sum, [, value]) => sum + value, 0);
             return {
                 list: list.slice(0, topN).map(([engineer, compensationHours]) => ({ engineer, compensationHours })),
-                total
+                total,
+                count: list.length
             };
         }
 
@@ -306,6 +327,9 @@
             const top3EngineerShare = billableHours > 0
                 ? (engEntries.slice(0, 3).reduce((sum, [, metric]) => sum + metric.billableHours, 0) / billableHours) * 100
                 : 0;
+            const externalSupportRatio = data.length > 0
+                ? (engEntries.reduce((sum, [, metric]) => sum + metric.billableCount, 0) / data.length) * 100
+                : 0;
             const top3CustomerShare = data.length > 0
                 ? (custEntries.slice(0, 3).reduce((sum, [, metric]) => sum + metric.count, 0) / data.length) * 100
                 : 0;
@@ -315,7 +339,12 @@
                 ? custEntries.reduce((sum, [, metric]) => sum + metric.engs.size, 0) / custEntries.length
                 : 0;
             const avgHoursPerCustomer = custEntries.length ? totalHours / custEntries.length : 0;
-            const topEngineer = engEntries.slice().sort((a, b) => b[1].billableCount - a[1].billableCount)[0] || null;
+            const topEngineer = engEntries
+                .filter(([, metric]) => metric.billableCount > 0)
+                .sort((a, b) => {
+                    if (b[1].billableCount !== a[1].billableCount) return b[1].billableCount - a[1].billableCount;
+                    return b[1].billableHours - a[1].billableHours;
+                })[0] || null;
             const topCustomer = custEntries[0] || null;
 
             return {
@@ -335,6 +364,7 @@
                 overTargetEngineers,
                 underDangerEngineers,
                 top3EngineerShare,
+                externalSupportRatio,
                 top3CustomerShare,
                 repeatCustomerCount,
                 repeatCustomerRatio: custEntries.length > 0 ? (repeatCustomerCount / custEntries.length) * 100 : 0,
