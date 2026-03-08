@@ -278,36 +278,32 @@
     };
     const HOLIDAY_DATA = CONTRACT_UTILS.normalizeHolidayConfig(CONFIG.HOLIDAYS);
     let ACTIVE_HOLIDAY_SET = new Set();
-    let deptColorCache = {};
-    let deptIndex = 0;
+    const dashboardUI = window.DASH_DASHBOARD_UI.createDashboardUI({
+        Chart,
+        COLORS,
+        DEPT_COLORS,
+        DEPT_BG_COLORS,
+        formatNum,
+        getCharts: () => charts,
+        setChart: (id, chart) => { charts[id] = chart; }
+    });
+
     function getDeptColor(deptName) {
-        if (!deptColorCache[deptName]) {
-            deptColorCache[deptName] = {
-                color: DEPT_COLORS[deptIndex % DEPT_COLORS.length],
-                bg: DEPT_BG_COLORS[deptIndex % DEPT_BG_COLORS.length]
-            };
-            deptIndex++;
-        }
-        return deptColorCache[deptName];
+        return dashboardUI.getDeptColor(deptName);
     }
     function resetDeptColors() {
-        deptColorCache = {};
-        deptIndex = 0;
+        return dashboardUI.resetDeptColors();
     }
     function escapeHtml(value) {
-        return String(value == null ? '' : value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+        return dashboardUI.escapeHtml(value);
     }
     function escapeAttr(value) {
-        return escapeHtml(value).replace(/\r?\n/g, ' ');
+        return dashboardUI.escapeAttr(value);
     }
     function safeInlineText(value) {
-        return escapeHtml(String(value == null ? '' : value).replace(/\r?\n/g, ' '));
+        return dashboardUI.safeInlineText(value);
     }
+
     function resetFilteredComputationCache() {
         filteredComputationCache = { dataRef: filteredData, store: {} };
     }
@@ -449,19 +445,140 @@
         getDateRange: () => dateRange
     });
 
+    const overviewTab = window.DASH_OVERVIEW_TAB.createOverviewTab({
+        CONFIG,
+        COLORS,
+        formatNum,
+        utilColor,
+        safeInlineText,
+        getFilteredData: () => filteredData,
+        getComparablePeriodContext,
+        aggregateEngineers,
+        buildAnalyticsSummary,
+        summarizeEntityTransition,
+        formatDateRangeLabel,
+        buildDeltaHtml,
+        aggregateByDate,
+        movingAverage,
+        upsertChart,
+        lineChartConfig,
+        aggregateByWeek,
+        getWeekLabel,
+        aggregateCounts,
+        topNWithOther,
+        pieChartConfig,
+        barChartConfig,
+        makeDrilldownClick,
+        getDeptColor,
+        aggregateByTeam,
+        getCompensationTopEngineers,
+        getActiveFilterFromDate: () => activeFilterFromDate,
+        getActiveFilterToDate: () => activeFilterToDate,
+        isBillable,
+        isInternal,
+        getWeekKey,
+        getContractWorkHours
+    });
+
+    const engineerTab = window.DASH_ENGINEER_TAB.createEngineerTab({
+        CONFIG,
+        COLORS,
+        utilColor,
+        safeInlineText,
+        getFilteredData: () => filteredData,
+        getComparablePeriodContext,
+        aggregateEngineers,
+        buildAnalyticsSummary,
+        summarizeEntityTransition,
+        buildDeltaHtml,
+        upsertChart,
+        makeDrilldownClick,
+        getContractWorkDays: () => contractWorkDays,
+        getDeptColor,
+        buildDeptLegendHTML,
+        getAllDeptNames,
+        barChartConfig,
+        aggregateByKeyAndDate,
+        crossTab,
+        buildHeatmapHTML,
+        stackedBarConfig,
+        lineChartConfig
+    });
+
+    const customerTab = window.DASH_CUSTOMER_TAB.createCustomerTab({
+        CONFIG,
+        COLORS,
+        safeInlineText,
+        escapeAttr,
+        getFilteredData: () => filteredData,
+        getComparablePeriodContext,
+        aggregateCustomers,
+        buildAnalyticsSummary,
+        summarizeEntityTransition,
+        buildDeltaHtml,
+        upsertChart,
+        typeCategoryOf,
+        stackedBarConfig,
+        aggregateByKeyAndDate,
+        lineChartConfig,
+        barChartConfig,
+        crossTab,
+        buildHeatmapHTML
+    });
+
+    const salesTab = window.DASH_SALES_TAB.createSalesTab({
+        CONFIG,
+        COLORS,
+        safeInlineText,
+        getFilteredData: () => filteredData,
+        aggregateSales,
+        upsertChart,
+        typeCategoryOf,
+        stackedBarConfig,
+        aggregateByKeyAndDate,
+        lineChartConfig,
+        crossTab,
+        buildHeatmapHTML
+    });
+
+    const productTab = window.DASH_PRODUCT_TAB.createProductTab({
+        COLORS,
+        safeInlineText,
+        getFilteredData: () => filteredData,
+        aggregateProducts,
+        upsertChart,
+        productGroupOf,
+        pieChartConfig,
+        typeCategoryOf,
+        stackedBarConfig,
+        buildDeptLegendHTML,
+        getDeptColor,
+        aggregateByKeyAndDate,
+        lineChartConfig,
+        crossTab,
+        buildHeatmapHTML,
+        getAllDeptNames
+    });
+
+    const supportTab = window.DASH_SUPPORT_TAB.createSupportTab({
+        safeInlineText,
+        getFilteredData: () => filteredData,
+        visitTypeOf,
+        typeCategoryOf,
+        upsertChart,
+        pieChartConfig,
+        lineChartConfig,
+        stackedBarConfig,
+        crossTab,
+        buildHeatmapHTML
+    });
+
     function getAllDeptNames(data) {
-        return [...new Set(data.map(r => String(r['부서명'] || '').trim()).filter(Boolean))].sort();
+        return dashboardUI.getAllDeptNames(data);
     }
     function buildDeptLegendHTML(deptNames) {
-        return deptNames.map(d => {
-            const c = getDeptColor(d);
-            return `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color}"></span>${safeInlineText(d)}</span>`;
-        }).join('');
+        return dashboardUI.buildDeptLegendHTML(deptNames);
     }
-
-    /* ============================================================
-       유틸리티 함수
-       ============================================================ */
 
     function getHolidaySetForRange(startDate, endDate) {
         ACTIVE_HOLIDAY_SET = CONTRACT_UTILS.buildHolidaySetForRange(startDate, endDate, HOLIDAY_DATA);
@@ -928,1765 +1045,71 @@
 
     /** 히트맵 HTML 생성기 */
     function buildHeatmapHTML(rowLabels, colLabels, matrix, maxVal) {
-        if (!rowLabels.length || !colLabels.length) return '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터가 없습니다</p>';
-        let html = '<table class="heatmap-table"><thead><tr><th></th>';
-        colLabels.forEach(c => { html += `<th>${safeInlineText(c)}</th>`; });
-        html += '<th>합계</th></tr></thead><tbody>';
-        rowLabels.forEach((rl, ri) => {
-            html += `<tr><td>${safeInlineText(rl)}</td>`;
-            let rowSum = 0;
-            colLabels.forEach((cl, ci) => {
-                const v = matrix[ri][ci] || 0;
-                rowSum += v;
-                const intensity = maxVal > 0 ? v / maxVal : 0;
-                const bg = v > 0 ? `rgba(79,70,229,${0.08 + intensity * 0.72})` : 'transparent';
-                const fg = intensity > 0.5 ? 'white' : 'var(--gray-700)';
-                const tooltip = v > 0 ? `지원 건수(건): ${v}` : '지원 건수(건): 0';
-                html += `<td><span class="hm-cell" style="background:${bg};color:${fg}" title="${tooltip}">${v || ''}</span></td>`;
-            });
-            html += `<td><strong title="지원 건수(건): ${rowSum}">${rowSum}</strong></td></tr>`;
-        });
-        html += '</tbody></table>';
-        return html;
+        return dashboardUI.buildHeatmapHTML(rowLabels, colLabels, matrix, maxVal);
     }
 
-    /* ============================================================
-       Chart.js 헬퍼 (인스턴스 재사용)
-       ============================================================ */
-
-    /** 차트 생성 또는 업데이트 */
     function upsertChart(id, config) {
-        const canvas = document.getElementById(id);
-        if (!canvas) return null;
-        const ctx = canvas.getContext('2d');
-
-        if (charts[id]) {
-            // 기존 인스턴스 재사용: 데이터만 갱신
-            const chart = charts[id];
-            chart.data = config.data;
-            if (config.options) {
-                // 옵션 업데이트 (깊은 병합은 생략, 필요 시 재생성)
-                Object.assign(chart.options, config.options);
-            }
-            chart.update('none'); // 애니메이션 없이 즉시 갱신
-            return chart;
-        } else {
-            charts[id] = new Chart(ctx, config);
-            return charts[id];
-        }
+        return dashboardUI.upsertChart(id, config);
     }
 
-    /** 라인차트 설정 생성 */
-    function lineChartConfig(labels, datasets, yTitle = '건수', xTitle = '날짜') {
-        return {
-            type: 'line',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: { legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 16 } } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { maxTicksLimit: 15, font: { size: 11 } }, title: { display: !!xTitle, text: xTitle || '', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    y: { beginAtZero: true, title: { display: true, text: yTitle, font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { stepSize: 1, font: { size: 11 } } }
-                }
-            }
-        };
+    function lineChartConfig(labels, datasets, yTitle = '??', xTitle = '??') {
+        return dashboardUI.lineChartConfig(labels, datasets, yTitle, xTitle);
     }
 
-    /** 막대차트 설정 생성 */
     function barChartConfig(labels, data, label, color, horizontal = false, valTitle = '', catTitle = '') {
-        return {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{ label, data, backgroundColor: Array.isArray(color) ? color : color + 'CC', borderColor: Array.isArray(color) ? color : color, borderWidth: 1, borderRadius: 4, maxBarThickness: 40 }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: horizontal ? 'y' : 'x',
-                plugins: { legend: { display: false } },
-                scales: {
-                    [horizontal ? 'x' : 'y']: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, title: { display: !!valTitle, text: valTitle || '', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    [horizontal ? 'y' : 'x']: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: !!catTitle, text: catTitle || '', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        };
+        return dashboardUI.barChartConfig(labels, data, label, color, horizontal, valTitle, catTitle);
     }
 
-    /** 파이/도넛 차트 설정 */
     function pieChartConfig(labels, data, isDoughnut = true) {
-        return {
-            type: isDoughnut ? 'doughnut' : 'pie',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: COLORS.slice(0, labels.length).map(c => c + 'CC'),
-                    borderColor: COLORS.slice(0, labels.length),
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'right', labels: { font: { size: 11, family: 'Noto Sans KR' }, padding: 10, usePointStyle: true } },
-                    tooltip: {
-                        callbacks: {
-                            label: function (ctx) {
-                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                const pct = ((ctx.parsed / total) * 100).toFixed(1);
-                                return ` ${ctx.label}: ${formatNum(ctx.parsed)}건 (${pct}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        };
+        return dashboardUI.pieChartConfig(labels, data, isDoughnut);
     }
 
-    /** 스택 바 차트 설정 */
     function stackedBarConfig(labels, datasets, horizontal = false, valTitle = '', catTitle = '') {
-        return {
-            type: 'bar',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: horizontal ? 'y' : 'x',
-                plugins: { legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } } },
-                scales: {
-                    x: { stacked: true, ticks: { font: { size: 11 } }, grid: { display: horizontal }, title: { display: !!(horizontal ? valTitle : catTitle), text: (horizontal ? valTitle : catTitle) || '', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 } }, grid: { display: !horizontal }, title: { display: !!(horizontal ? catTitle : valTitle), text: (horizontal ? catTitle : valTitle) || '', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        };
+        return dashboardUI.stackedBarConfig(labels, datasets, horizontal, valTitle, catTitle);
     }
 
-    /** 랭킹 테이블 HTML 생성 */
     function rankTableHTML(entries, labelName) {
-        if (!entries.length) return '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터가 없습니다</p>';
-        const total = entries.reduce((s, e) => s + e[1], 0);
-        let html = `<table class="rank-table"><thead><tr><th>#</th><th>${safeInlineText(labelName)}</th><th>건수</th><th>비율</th><th>바</th></tr></thead><tbody>`;
-        entries.forEach(([name, count], i) => {
-            const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-            const rc = i < 3 ? `rank-${i + 1}` : 'rank-other';
-            const barColor = COLORS[i % COLORS.length];
-            html += `<tr>
-                    <td><span class="rank-num ${rc}">${i + 1}</span></td>
-                    <td>${safeInlineText(name)}</td>
-                    <td><strong>${formatNum(count)}</strong></td>
-                    <td>${pct}%</td>
-                    <td style="min-width:120px"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
-                </tr>`;
-        });
-        html += '</tbody></table>';
-        return html;
+        return dashboardUI.rankTableHTML(entries, labelName);
     }
 
-    /* ============================================================
-       TAB 1: Overview
-       ============================================================ */
     function updateOverviewTab() {
-        const data = filteredData;
-        if (!data.length) {
-            document.getElementById('kpi-total').textContent = '0';
-            return;
-        }
-
-        const compareContext = getComparablePeriodContext();
-        const ovEngMap = aggregateEngineers(data);
-        const prevEngMap = aggregateEngineers(compareContext.previousData);
-        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, engMap: ovEngMap });
-        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, engMap: prevEngMap });
-        const customerTransition = summarizeEntityTransition(currentSummary.customerSet, previousSummary.customerSet);
-
-        document.getElementById('kpi-total').textContent = formatNum(currentSummary.dataCount);
-        document.getElementById('kpi-total-sub').innerHTML = buildDeltaHtml(currentSummary.dataCount, previousSummary.dataCount, { decimals: 0, unit: '건' });
-        document.getElementById('kpi-engineers').textContent = formatNum(currentSummary.activeEngineerCount);
-        document.getElementById('kpi-engineers-sub').innerHTML = `${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '명' })} · 목표가동 ${currentSummary.overTargetEngineers}명`;
-        document.getElementById('kpi-customers').textContent = formatNum(currentSummary.activeCustomerCount);
-        document.getElementById('kpi-customers-sub').innerHTML = `반복 ${customerTransition.retainedCount}곳 (${customerTransition.retainedRatio.toFixed(0)}%) · 신규 ${customerTransition.newCount}곳`;
-        document.getElementById('kpi-products').textContent = formatNum(currentSummary.activeProductCount);
-        document.getElementById('kpi-products-sub').innerHTML = `${buildDeltaHtml(currentSummary.activeProductCount, previousSummary.activeProductCount, { decimals: 0, unit: '종' })} · 상위 3고객 ${currentSummary.top3CustomerShare.toFixed(1)}%`;
-        document.getElementById('kpi-period').textContent = compareContext.currentRange ? formatDateRangeLabel(compareContext.currentRange.start, compareContext.currentRange.end) : '-';
-        document.getElementById('kpi-period-sub').innerHTML = compareContext.previousRange
-            ? `${currentSummary.days}\uC77C / ${safeInlineText(compareContext.modeLabel)} ${safeInlineText(formatDateRangeLabel(compareContext.previousRange.start, compareContext.previousRange.end))}`
-            : `${currentSummary.days}일`;
-        document.getElementById('kpi-avg').textContent = currentSummary.avgPerDay.toFixed(1);
-        document.getElementById('kpi-avg-sub').innerHTML = buildDeltaHtml(currentSummary.avgPerDay, previousSummary.avgPerDay, { decimals: 1, unit: '건/일' });
-
-        const ovUtilEl = document.getElementById('kpi-util');
-        ovUtilEl.textContent = currentSummary.activeEngineerCount > 0 ? `${currentSummary.avgUtilPct.toFixed(1)}%` : '-';
-        ovUtilEl.style.color = currentSummary.activeEngineerCount > 0 ? utilColor(currentSummary.avgUtilPct) : '';
-        document.getElementById('kpi-util-sub').innerHTML = currentSummary.activeEngineerCount > 0
-            ? `가동${currentSummary.billableHours.toFixed(0)}h / 소정${currentSummary.totalWorkingHours}h · ${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}`
-            : '<span style="color:var(--gray-500);">비교 없음</span>';
-
-        const dailyMap = aggregateByDate(data);
-        const sortedDates = Object.keys(dailyMap).sort();
-        const dailyValues = sortedDates.map(d => dailyMap[d]);
-        const ma7 = movingAverage(dailyValues, CONFIG.MOVING_AVG_DAYS);
-        upsertChart('chartDailyLine', lineChartConfig(
-            sortedDates,
-            [
-                {
-                    label: '일별 지원 건수',
-                    data: dailyValues,
-                    borderColor: '#4F46E5', backgroundColor: 'rgba(79,70,229,0.08)',
-                    fill: true, tension: 0.3, pointRadius: 2, pointHoverRadius: 5, borderWidth: 1.5
-                },
-                {
-                    label: '7일 이동평균',
-                    data: ma7,
-                    borderColor: '#F97316', backgroundColor: 'transparent',
-                    fill: false, tension: 0.4, pointRadius: 0, pointHoverRadius: 4,
-                    borderWidth: 2.5, borderDash: [6, 3]
-                }
-            ],
-            '건수', '날짜'
-        ));
-
-        const weeklyMap = aggregateByWeek(data);
-        const weekKeys = Object.keys(weeklyMap).sort();
-        const weekCounts = weekKeys.map(k => weeklyMap[k]);
-        const weekLabels = weekKeys.map(getWeekLabel);
-        const weekDelta = weekCounts.map((c, i) => {
-            if (i === 0) return null;
-            const prev = weekCounts[i - 1];
-            return prev > 0 ? Math.round(((c - prev) / prev) * 1000) / 10 : null;
-        });
-        const wBarBg = weekDelta.map((d, i) => {
-            if (i === 0 || d === null) return '#7C3AED99';
-            if (d > 0) return '#10B98199';
-            if (d < 0) return '#EF444499';
-            return '#9CA3AF99';
-        });
-        const wBarBorder = wBarBg.map(c => c.replace('99', ''));
-
-        const totalAvg = weekCounts.reduce((a, b) => a + b, 0) / (weekCounts.length || 1);
-        const last4 = weekCounts.slice(-4);
-        const last4Avg = last4.reduce((a, b) => a + b, 0) / (last4.length || 1);
-        const trendDir = last4Avg > totalAvg ? '▲' : last4Avg < totalAvg ? '▼' : '━';
-        const trendColor = last4Avg > totalAvg ? '#059669' : last4Avg < totalAvg ? '#DC2626' : '#6B7280';
-        const summaryEl = document.getElementById('weeklyTrendSummary');
-        if (summaryEl) {
-            summaryEl.innerHTML =
-                `전체 ${weekKeys.length}주 · 주평균 ${totalAvg.toFixed(1)}건 &nbsp;` +
-                `<span style="color:${trendColor};font-weight:600;">${trendDir} 최근 4주 평균 ${last4Avg.toFixed(1)}건</span> &nbsp;` +
-                buildDeltaHtml(currentSummary.dataCount, previousSummary.dataCount, { decimals: 0, unit: '건' });
-        }
-
-        upsertChart('chartWeeklyTrend', {
-            type: 'bar',
-            data: {
-                labels: weekLabels,
-                datasets: [
-                    {
-                        label: '주간 지원 건수',
-                        data: weekCounts,
-                        backgroundColor: wBarBg,
-                        borderColor: wBarBorder,
-                        borderWidth: 1.5, borderRadius: 5, maxBarThickness: 70,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: '전주 대비 증감(%)',
-                        data: weekDelta,
-                        type: 'line',
-                        borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.12)',
-                        pointRadius: 5, pointHoverRadius: 7,
-                        pointBackgroundColor: '#F59E0B',
-                        pointBorderColor: 'white', pointBorderWidth: 1.5,
-                        tension: 0.35, borderWidth: 2, spanGaps: true,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            font: { size: 11, family: 'Noto Sans KR' },
-                            usePointStyle: true,
-                            padding: 14,
-                            generateLabels: (chart) => {
-                                const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                                return items.map(item => {
-                                    if (item.text === '주간 지원 건수') {
-                                        item.fillStyle = '#7C3AED';
-                                        item.strokeStyle = '#7C3AED';
-                                    } else if (item.text === '전주 대비 증감(%)') {
-                                        item.fillStyle = '#F59E0B';
-                                        item.strokeStyle = '#F59E0B';
-                                    }
-                                    return item;
-                                });
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: items => {
-                                const i = items[0].dataIndex;
-                                const d = weekDelta[i];
-                                if (i === 0 || d === null) return ['전주 대비: 기준 주차'];
-                                const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '━';
-                                return [`전주 대비: ${arrow} ${Math.abs(d)}%`];
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: { font: { size: 11 } },
-                        title: { display: true, text: '주차', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1, font: { size: 11 } },
-                        title: { display: true, text: '지원 건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }
-                    },
-                    y1: {
-                        position: 'right',
-                        ticks: { callback: v => v + '%', font: { size: 11 } },
-                        title: { display: true, text: '전주 대비 (%)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' },
-                        grid: { drawOnChartArea: false }
-                    }
-                }
-            }
-        });
-
-        const counts = aggregateCounts(data, '제품명', '지원유형');
-        const prodTop = topNWithOther(counts['제품명'], CONFIG.CHART_TOP_N.PIE);
-        const prodPieCfg = pieChartConfig(prodTop.labels, prodTop.values);
-        prodPieCfg.options.onClick = makeDrilldownClick('제품명');
-        upsertChart('chartProductPie', prodPieCfg);
-
-        const typeTop = topNWithOther(counts['지원유형'], CONFIG.CHART_TOP_N.BAR);
-        const typeBarCfg = barChartConfig(typeTop.labels, typeTop.values, '지원유형', COLORS.slice(0, typeTop.labels.length), true, '건수', '지원유형');
-        typeBarCfg.options.onClick = makeDrilldownClick('지원유형');
-        upsertChart('chartTypeBar', typeBarCfg);
-
-        const deptCounts = aggregateCounts(data, '부서명');
-        const deptEntries = Object.entries(deptCounts['부서명']).sort((a, b) => b[1] - a[1]);
-        const deptBarCfg = barChartConfig(
-            deptEntries.map(e => e[0]), deptEntries.map(e => e[1]), '부서', deptEntries.map(e => getDeptColor(e[0]).color), false, '건수', '부서'
-        );
-        deptBarCfg.options.onClick = makeDrilldownClick('부서명', true);
-        upsertChart('chartDeptBar', deptBarCfg);
-
-        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-        const dowCounts = [0, 0, 0, 0, 0, 0, 0];
-        for (let i = 0; i < data.length; i++) {
-            if (data[i]._dayOfWeek >= 0) dowCounts[data[i]._dayOfWeek]++;
-        }
-        upsertChart('chartDayOfWeek', {
-            type: 'bar',
-            data: {
-                labels: dayNames,
-                datasets: [{
-                    label: '건수',
-                    data: dowCounts,
-                    backgroundColor: dayNames.map((_, i) => i === 0 || i === 6 ? '#EF4444CC' : '#4F46E5CC'),
-                    borderColor: dayNames.map((_, i) => i === 0 || i === 6 ? '#EF4444' : '#4F46E5'),
-                    borderWidth: 1,
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: '건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    x: { grid: { display: false }, title: { display: true, text: '요일', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        });
-
-        const ovEngEntries = Object.entries(ovEngMap);
-        const ovTeamMap = aggregateByTeam(ovEngMap, currentSummary.contractHoursPerEngineer);
-        const ovTeamEntries = Object.entries(ovTeamMap).sort((a, b) => a[0].localeCompare(b[0]));
-        const ovTeamNames = ovTeamEntries.map(e => e[0]);
-        const ovTeamUtilPcts = ovTeamEntries.map(e => e[1].workH > 0 ? Math.round((e[1].billableH / e[1].workH) * 1000) / 10 : 0);
-        const ovAvgUtil = currentSummary.avgUtilPct;
-        upsertChart('chartOverviewUtil', {
-            type: 'bar',
-            data: {
-                labels: [...ovTeamNames, '전체 평균'],
-                datasets: [{
-                    label: '가동률(%)',
-                    data: [...ovTeamUtilPcts, Math.round(ovAvgUtil * 10) / 10],
-                    backgroundColor: [...ovTeamNames.map(n => getDeptColor(n).color + 'CC'), '#059669CC'],
-                    borderColor: [...ovTeamNames.map(n => getDeptColor(n).color), '#059669'],
-                    borderWidth: 2, borderRadius: 6, maxBarThickness: 100
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            afterLabel: (ctx) => {
-                                const idx = ctx.dataIndex;
-                                if (idx < ovTeamEntries.length) {
-                                    const te = ovTeamEntries[idx][1];
-                                    return [`가동시간: ${te.billableH.toFixed(1)}h`, `소정근무: ${te.workH}h`, `엔지니어: ${te.engCount}명`];
-                                }
-                                return [`가동시간: ${currentSummary.billableHours.toFixed(1)}h`, `소정근무: ${currentSummary.totalWorkingHours}h`, `엔지니어: ${ovEngEntries.length}명`];
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { ticks: { font: { size: 13, weight: '600' } }, grid: { display: false }, title: { display: true, text: '팀(부서)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    y: { beginAtZero: true, max: Math.max(120, Math.ceil(Math.max(...ovTeamUtilPcts, ovAvgUtil) / 10) * 10 + 10), ticks: { callback: v => v + '%', font: { size: 11 } }, title: { display: true, text: '가동률(%)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        });
-
-        const insights = generateInsights(data, ovEngMap, getCompensationTopEngineers(activeFilterFromDate, activeFilterToDate));
-        renderInsightPanel(insights);
+        return overviewTab.updateOverviewTab();
     }
 
     /* ============================================================
-       자동 인사이트 생성
-       ============================================================ */
-    function generateInsights(data, engMap, compSummary) {
-        const MAX_INSIGHTS = 15;
-        const insights = [];
-        const engEntries = Object.entries(engMap);
-        if (!engEntries.length) return insights;
-
-        const pushInsight = (insight) => {
-            if (insights.length >= MAX_INSIGHTS) return false;
-            insights.push(insight);
-            return insights.length < MAX_INSIGHTS;
-        };
-
-        // 엔지니어 메트릭 단일 순회 집계
-        const engUtils = [];
-        let totalBillH = 0;
-        let totalWorkH = 0;
-        let totalBillableCount = 0;
-        let totalHours = 0;
-        let totalInternal = 0;
-        let totalActDays = 0;
-        let topBillable = engEntries[0];
-        let topUtil = null;
-        const insightContractWorkH = getContractWorkHours();
-        totalWorkH = engEntries.length * insightContractWorkH;
-        for (let i = 0; i < engEntries.length; i++) {
-            const [name, m] = engEntries[i];
-            const workH = insightContractWorkH;
-            const util = workH > 0 ? (m.billableHours / workH) * 100 : 0;
-            const utilEntry = { name, util, m };
-            engUtils.push(utilEntry);
-
-            totalBillH += m.billableHours;
-            totalBillableCount += m.billableCount;
-            totalHours += m.hours;
-            totalInternal += m.internal;
-            totalActDays += m.dates.size;
-
-            if (m.billableCount > topBillable[1].billableCount) topBillable = engEntries[i];
-            if (!topUtil || util > topUtil.util) topUtil = utilEntry;
-        }
-        const avgUtil = totalWorkH > 0 ? (totalBillH / totalWorkH) * 100 : 0;
-        const compensation = compSummary && compSummary.list ? compSummary : { list: [], top: [], total: 0 };
-
-        // A0: 총 보상발생시간 Top 3 집중도
-        if (compensation.top && compensation.top.length >= 1) {
-            const top3 = compensation.top.slice(0, 3);
-            const top3Sum = top3.reduce((s, e) => s + e[1], 0);
-            const totalComp = compensation.total || 0;
-            const avgComp = compensation.list.length ? totalComp / compensation.list.length : 0;
-            const top1 = top3[0][1];
-            const top1Ratio = avgComp > 0 ? (top1 / avgComp) : 0;
-            const topShare = totalComp > 0 ? (top3Sum / totalComp) * 100 : 0;
-            const top3Names = top3.map((e, idx) => `${idx + 1}. ${e[0]} (${e[1].toFixed(1)}h)`).join(', ');
-            const type = top1Ratio >= 2 ? 'danger' : top1Ratio >= 1.5 ? 'warning' : 'info';
-            const typeLabel = type === 'danger' ? '보상시간 편중 위험' : type === 'warning' ? '보상시간 편중 주의' : '보상시간 편중 확인';
-            const desc = `근무-보상시간 통계 기준 상위 ${top3.length}인의 총 보상발생시간이 전체의 ${top3Sum.toFixed(1)}h (${topShare.toFixed(0)}%)입니다. ${top3Names}. ` +
-                `상위 1인 집중도는 팀 평균 대비 ${top1Ratio.toFixed(1)}배로, 인력별 보상 편중 관리가 필요합니다.`;
-            if (!pushInsight({ type, icon: '💰', label: '총 보상발생시간', title: `${typeLabel} — Top 3이 ${topShare.toFixed(0)}% 집중`, desc })) return insights;
-        }
-
-        // 1~3: 전체 가동률
-        if (totalWorkH > 0) {
-            const pct = avgUtil.toFixed(1);
-            if (avgUtil < 60) {
-                pushInsight({ type: 'danger', icon: '🔴', label: '가동률 경보', title: `전체 가동률 ${pct}% — 심각 수준`, desc: '전체 팀 가동률이 60% 미만입니다. 즉각적인 업무 재배분이 필요합니다.' });
-            } else if (avgUtil < 80) {
-                pushInsight({ type: 'warning', icon: '🟡', label: '가동률 주의', title: `전체 가동률 ${pct}% — 목표 미달`, desc: '전체 팀 가동률이 목표(80%) 이하입니다. 개선이 필요합니다.' });
-            } else {
-                pushInsight({ type: 'success', icon: '✅', label: '가동률 달성', title: `전체 평균 가동률 ${pct}% 달성`, desc: '팀 전체가 목표 가동률 80%를 초과 달성하고 있습니다.' });
-            }
-        }
-
-        // 4: 가동률 현저히 낮은 엔지니어 (< 40% AND 팀평균-20%p↓)
-        for (let i = 0; i < engUtils.length; i++) {
-            const e = engUtils[i];
-            if (e.util < 40 && (avgUtil - e.util) >= 20) {
-                if (!pushInsight({ type: 'danger', icon: '⚠️', label: '개인 가동률 경보', title: `${e.name} — 가동률 ${e.util.toFixed(1)}%, 팀평균 대비 현저히 낮음`, desc: `팀 평균(${avgUtil.toFixed(1)}%)보다 ${(avgUtil - e.util).toFixed(1)}%p 낮습니다.` })) {
-                    return insights;
-                }
-            }
-        }
-
-        // data 단일 순회로 공통 메트릭 집계
-        const custEngMap = {};
-        const prodEngMap = {};
-        const custCounts = {};
-        const weekMap = {};
-        let billableCntH = 0;
-        let inspectCntH = 0;
-        let externalCntJ = 0;
-        let noSalesCntJ = 0;
-        let presalesCntL = 0;
-        let billableTotalL = 0;
-        for (let i = 0; i < data.length; i++) {
-            const row = data[i];
-            const cust = row['고객사명'];
-            const prod = row['제품명'];
-            const eng = row['엔지니어'];
-            if (cust && eng) {
-                if (!custEngMap[cust]) custEngMap[cust] = new Set();
-                custEngMap[cust].add(eng);
-            }
-            if (prod && eng) {
-                if (!prodEngMap[prod]) prodEngMap[prod] = new Set();
-                prodEngMap[prod].add(eng);
-            }
-
-            const custName = String(cust || '').trim();
-            if (custName) custCounts[custName] = (custCounts[custName] || 0) + 1;
-
-            if (row._date) {
-                const weekKey = getWeekKey(row._date);
-                weekMap[weekKey] = (weekMap[weekKey] || 0) + 1;
-            }
-
-            const supportType = String(row['지원유형'] || '');
-            const isBill = isBillable(supportType);
-            if (isBill) {
-                billableCntH++;
-                billableTotalL++;
-                if (/점검지원/.test(supportType)) inspectCntH++;
-                if (/[Pp]resales/.test(supportType)) presalesCntL++;
-            }
-            if (!isInternal(supportType)) {
-                externalCntJ++;
-                if (!String(row['담당영업'] || '').trim()) noSalesCntJ++;
-            }
-
-        }
-
-        // 5: 단일 엔지니어 의존 고객사
-        const singleEngCusts = Object.keys(custEngMap).filter(c => custEngMap[c].size === 1);
-        if (singleEngCusts.length >= 1) {
-            if (!pushInsight({ type: 'danger', icon: '🏢', label: '고객사 리스크', title: `${singleEngCusts.length}개 고객사 단일 엔지니어 의존 — 인력 리스크`, desc: `해당 엔지니어 부재 시 고객사 대응 공백이 발생할 수 있습니다.` })) return insights;
-        }
-
-        // 6: 단일 엔지니어 커버 제품 1~5종
-        const singleEngProds = Object.keys(prodEngMap).filter(p => prodEngMap[p].size === 1);
-        if (singleEngProds.length >= 1 && singleEngProds.length <= 5) {
-            if (!pushInsight({ type: 'warning', icon: '🔧', label: '제품 커버리지 위험', title: `${singleEngProds.length}종 제품 단일 엔지니어 커버 — 커버리지 위험`, desc: '특정 제품이 한 명의 엔지니어에게만 의존되어 있어 지식 편중 위험이 있습니다.' })) return insights;
-        }
-
-        // 7: 최고 가동률 엔지니어 ≥ 80%
-        if (topUtil && topUtil.util >= CONFIG.UTIL.TARGET) {
-            if (!pushInsight({ type: 'success', icon: '🏆', label: '우수 가동률', title: `${topUtil.name} — 가동률 ${topUtil.util.toFixed(1)}%, 이번 기간 최고`, desc: '가장 높은 가동률을 기록한 엔지니어입니다.' })) return insights;
-        }
-
-        // 8: 최다 고객사 엔지니어 ≥ 3개사
-        const engCustCount = {};
-        for (const cust in custEngMap) {
-            custEngMap[cust].forEach(eng => {
-                engCustCount[eng] = (engCustCount[eng] || 0) + 1;
-            });
-        }
-        const topCustEng = Object.entries(engCustCount).sort((a, b) => b[1] - a[1])[0];
-        if (topCustEng && topCustEng[1] >= 3) {
-            if (!pushInsight({ type: 'success', icon: '🌟', label: '핵심 역할', title: `${topCustEng[0]} — ${topCustEng[1]}개 고객사 지원, 핵심 역할`, desc: '가장 많은 고객사를 담당하는 엔지니어입니다.' })) return insights;
-        }
-
-        // A: 업무 집중 리스크 — 상위 1명이 전체 billableCount의 30%↑ 독점
-        if (totalBillableCount > 0) {
-            const topPct = (topBillable[1].billableCount / totalBillableCount) * 100;
-            if (topPct >= 40) {
-                if (!pushInsight({ type: 'danger', icon: '⚡', label: '업무 집중 위험', title: `${topBillable[0]} — 전체 고객 지원의 ${topPct.toFixed(0)}% 독점, 업무 집중 리스크`, desc: `핵심 인원 부재 시 전체 고객 대응에 심각한 공백이 발생할 수 있습니다.` })) return insights;
-            } else if (topPct >= 30) {
-                if (!pushInsight({ type: 'warning', icon: '⚡', label: '업무 집중 주의', title: `${topBillable[0]} — 전체 고객 지원의 ${topPct.toFixed(0)}% 담당, 편중 주의`, desc: `단일 엔지니어 의존도가 높습니다. 업무 분산을 검토하세요.` })) return insights;
-            }
-        }
-
-        // B: 과부하 엔지니어 경보 — 투입시간이 팀 평균의 1.8배 초과
-        const avgHours = engEntries.length > 0 ? totalHours / engEntries.length : 0;
-        if (avgHours > 0) {
-            for (let i = 0; i < engEntries.length; i++) {
-                const [name, m] = engEntries[i];
-                if (!(m.hours > avgHours * 1.8)) continue;
-                const ratio = (m.hours / avgHours).toFixed(1);
-                if (!pushInsight({ type: 'warning', icon: '🔥', label: '과부하 경보', title: `${name} — 투입시간 ${m.hours.toFixed(0)}h, 팀 평균(${avgHours.toFixed(0)}h)의 ${ratio}배 초과`, desc: '번아웃 리스크가 있습니다. 업무량 조정을 검토하세요.' })) return insights;
-            }
-        }
-
-        // C: 내부업무 비율 과다 — 전체 건수 대비 내부 비율 40% 이상
-        const totalAll = data.length;
-        if (totalAll > 0) {
-            const internalPct = (totalInternal / totalAll) * 100;
-            if (internalPct >= 40) {
-                if (!pushInsight({ type: 'warning', icon: '🏠', label: '내부업무 과다', title: `내부업무 비율 ${internalPct.toFixed(0)}% — 고객 대응 가용 인력 부족`, desc: '외부 고객 지원 여력이 부족합니다. 내부업무 비중을 재검토하세요.' })) return insights;
-            }
-        }
-
-        // D: 고객사 쏠림 — 상위 3개 고객사가 전체의 60% 이상
-        const custCountEntries = Object.entries(custCounts).sort((a, b) => b[1] - a[1]);
-        if (custCountEntries.length >= 3 && totalAll > 0) {
-            const top3Sum = custCountEntries.slice(0, 3).reduce((s, e) => s + e[1], 0);
-            const top3Pct = (top3Sum / totalAll) * 100;
-            if (top3Pct >= 60) {
-                const top3Names = custCountEntries.slice(0, 3).map(e => e[0]).join(', ');
-                if (!pushInsight({ type: 'warning', icon: '📊', label: '고객사 쏠림', title: `상위 3개 고객사가 전체 지원의 ${top3Pct.toFixed(0)}% 집중 — 포트폴리오 편중`, desc: `${top3Names}에 지원이 집중되어 있습니다. 고객 포트폴리오 다양화를 검토하세요.` })) return insights;
-            }
-        }
-
-        // E: 주간 연속 하락 트렌드 — 최근 2주 연속 전주 대비 감소
-        const weekKeys = Object.keys(weekMap).sort();
-        if (weekKeys.length >= 3) {
-            const last = weekMap[weekKeys[weekKeys.length - 1]];
-            const prev = weekMap[weekKeys[weekKeys.length - 2]];
-            const prev2 = weekMap[weekKeys[weekKeys.length - 3]];
-            const delta1 = last - prev;
-            const delta2 = prev - prev2;
-            if (delta1 < 0 && delta2 < 0) {
-                const pct1 = ((delta1 / prev) * 100).toFixed(0);
-                const pct2 = ((delta2 / prev2) * 100).toFixed(0);
-                if (!pushInsight({ type: 'warning', icon: '📉', label: '연속 하락 추세', title: `지원 건수 2주 연속 감소 — 이번 주 ${pct1}%, 지난주 ${pct2}%`, desc: '업무량 감소 추세가 지속되고 있습니다. 원인을 점검하세요.' })) return insights;
-            }
-        }
-
-        // H: 점검지원 비율 저조 — 고객 지원 건 중 점검지원 < 15%
-        if (billableCntH >= 10) {
-            const inspPct = (inspectCntH / billableCntH) * 100;
-            if (inspPct < 15) {
-                if (!pushInsight({
-                    type: 'info', icon: '🔍', label: '점검지원 저조',
-                    title: `점검지원 비중 ${inspPct.toFixed(0)}% — 예방 점검 활동 강화 필요`,
-                    desc: '장애 대응 위주의 반응형 지원 구조입니다. 정기 점검 일정 확대로 사전 예방을 강화하세요.'
-                })) return insights;
-            }
-        }
-
-        // I: 주간 지원 급증 — 최근 주가 직전 주 대비 40% 이상 증가
-        if (weekKeys.length >= 2) {
-            const lastWk = weekMap[weekKeys[weekKeys.length - 1]];
-            const prevWk = weekMap[weekKeys[weekKeys.length - 2]];
-            if (prevWk > 0) {
-                const surgePct = ((lastWk - prevWk) / prevWk) * 100;
-                if (surgePct >= 40) {
-                    if (!pushInsight({
-                        type: 'warning', icon: '📈', label: '지원 수요 급증',
-                        title: `최근 주 지원 건수 ${surgePct.toFixed(0)}% 급증 (${prevWk}건 → ${lastWk}건)`,
-                        desc: '단기 수요 급증이 감지되었습니다. 대응 여력 및 인력 배분을 즉시 점검하세요.'
-                    })) return insights;
-                }
-            }
-        }
-
-        // J: 담당영업 미배정 — 외부 지원 건 중 담당영업 공백 ≥ 30%
-        if (externalCntJ >= 5) {
-            const noSalesPct = (noSalesCntJ / externalCntJ) * 100;
-            if (noSalesPct >= 30) {
-                if (!pushInsight({
-                    type: 'warning', icon: '👤', label: '영업 커버리지 공백',
-                    title: `외부 지원 ${noSalesCntJ}건(${noSalesPct.toFixed(0)}%) 담당영업 미배정`,
-                    desc: '영업 담당자 미지정 고객 지원이 많습니다. 담당 영업 배정 현황을 재점검하세요.'
-                })) return insights;
-            }
-        }
-
-        // K: 저활동 엔지니어 — 활동일이 팀 평균의 50% 미만 (billable 건 보유 기준)
-        const avgActDays = totalActDays / engEntries.length;
-        if (avgActDays >= 5) {
-            const lowActEngs = engEntries.filter(([, m]) => m.dates.size < avgActDays * 0.5 && m.billableCount > 0);
-            if (lowActEngs.length > 0) {
-                const nameStr = lowActEngs.slice(0, 3).map(([n]) => n).join(', ');
-                if (!pushInsight({
-                    type: 'info', icon: '🗓️', label: '저활동 엔지니어',
-                    title: `${lowActEngs.length}명 활동일 팀 평균(${avgActDays.toFixed(0)}일)의 절반 미만`,
-                    desc: `${nameStr} — 부분 참여, 휴가 또는 파견 상태일 수 있습니다. 가용 인력을 확인하세요.`
-                })) return insights;
-            }
-        }
-
-        // L: Presales 활성화 신호 — 고객지원 건 중 Presales ≥ 15%
-        if (billableTotalL >= 10 && presalesCntL > 0) {
-            const presalesPct = (presalesCntL / billableTotalL) * 100;
-            if (presalesPct >= 15) {
-                if (!pushInsight({
-                    type: 'success', icon: '💼', label: 'Presales 활성',
-                    title: `Presales 비중 ${presalesPct.toFixed(0)}% — 신규 영업 파이프라인 활발`,
-                    desc: `${presalesCntL}건의 기술 기여 영업 활동이 진행 중입니다. 수주 전환율을 모니터링하세요.`
-                })) return insights;
-            }
-        }
-
-        return insights;
-    }
-
-    function renderInsightPanel(insights) {
-        const panel = document.getElementById('insightPanel');
-        const cards = document.getElementById('insightCards');
-        const count = document.getElementById('insightCount');
-        if (!panel || !cards || !count) return;
-        if (!insights.length) {
-            panel.style.display = 'none';
-            return;
-        }
-        panel.style.display = '';
-        count.textContent = `${insights.length}개 항목`;
-        const severityLabel = {
-            danger: '경보',
-            warning: '주의',
-            success: '양호',
-            info: '정보'
-        };
-        cards.innerHTML = insights.map(ins => `
-                <div class="insight-card ic-${ins.type}">
-                    <div class="insight-head">
-                        <span class="insight-status">${severityLabel[ins.type] || '정보'}</span>
-                        <div class="insight-label">${safeInlineText(ins.label)}</div>
-                        <span class="insight-icon">${safeInlineText(ins.icon || '')}</span>
-                    </div>
-                    <div class="insight-title">${safeInlineText(ins.title)}</div>
-                    <div class="insight-desc">${safeInlineText(ins.desc)}</div>
-                </div>
-            `).join('');
-    }
-
-    /* ============================================================
-       TAB 2: 엔지니어 분석 (전면 재설계)
+       TAB 2: ???? ?? (?? ???)
        ============================================================ */
     function updateEngineerTab() {
-        const data = filteredData;
-        const compareContext = getComparablePeriodContext();
-        const engMap = aggregateEngineers(data);
-        const engEntries = Object.entries(engMap).sort((a, b) => b[1].count - a[1].count);
-
-        if (!engEntries.length) {
-            document.getElementById('engKpiRow').innerHTML = '';
-            document.getElementById('engHeatmap').innerHTML = '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터 없음</p>';
-            document.getElementById('engScorecard').innerHTML = '';
-            return;
-        }
-
-        const prevEngMap = aggregateEngineers(compareContext.previousData);
-        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, engMap: engMap });
-        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, engMap: prevEngMap });
-        const engineerTransition = summarizeEntityTransition(currentSummary.engineerSet, previousSummary.engineerSet);
-        const engContractWorkH = currentSummary.contractHoursPerEngineer;
-        const prevEngContractWorkH = previousSummary.contractHoursPerEngineer;
-
-        document.getElementById('engKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">활동 엔지니어</div><div class="kpi-mini-value">${currentSummary.activeEngineerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeEngineerCount, previousSummary.activeEngineerCount, { decimals: 0, unit: '명' })} · 유지 ${engineerTransition.retainedCount}명</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">평균 가동률</div><div class="kpi-mini-value" style="color:${utilColor(currentSummary.avgUtilPct)}">${currentSummary.avgUtilPct.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.avgUtilPct, previousSummary.avgUtilPct, { decimals: 1, mode: 'pp' })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">목표 가동 달성</div><div class="kpi-mini-value">${currentSummary.overTargetEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.overTargetEngineers, previousSummary.overTargetEngineers, { decimals: 0, unit: '명' })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">저가동 위험</div><div class="kpi-mini-value">${currentSummary.underDangerEngineers}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.underDangerEngineers, previousSummary.underDangerEngineers, { decimals: 0, unit: '명', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">업무 집중도</div><div class="kpi-mini-value">${currentSummary.top3EngineerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3EngineerShare, previousSummary.top3EngineerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">가동률 편차</div><div class="kpi-mini-value">${currentSummary.utilSpread.toFixed(1)}%p</div><div class="kpi-mini-sub">최고 ${currentSummary.maxUtilPct.toFixed(1)} / 최저 ${currentSummary.minUtilPct.toFixed(1)}</div></div>
-            `;
-
-        const bubbleData = engEntries.map((e, i) => ({
-            label: e[0],
-            data: [{ x: e[1].billableCount, y: Math.round(e[1].billableHours * 10) / 10, r: Math.max(5, e[1].billableCusts.size * 3) }],
-            backgroundColor: COLORS[i % COLORS.length] + '99',
-            borderColor: COLORS[i % COLORS.length],
-            borderWidth: 1
-        }));
-        upsertChart('chartEngBubble', {
-            type: 'bubble',
-            data: { datasets: bubbleData },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } },
-                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x}건, ${ctx.parsed.y}h, 고객사 ${Math.round(ctx.raw.r / 3)}곳` } }
-                },
-                scales: {
-                    x: { title: { display: true, text: '고객업무 건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true },
-                    y: { title: { display: true, text: '고객업무 투입시간 (h)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true }
-                }
-            }
-        });
-
-        const engByUtil = engEntries.map(([name, m]) => {
-            const workingH = engContractWorkH;
-            const utilPct = workingH > 0 ? (m.billableHours / workingH) * 100 : 0;
-            return { name, billableH: m.billableHours, workingH, utilPct, dept: m.dept };
-        }).sort((a, b) => b.utilPct - a.utilPct);
-        const utilColors = engByUtil.map(e => utilColor(e.utilPct) + 'CC');
-        const utilBorders = engByUtil.map(e => utilColor(e.utilPct));
-        upsertChart('chartEngUtil', {
-            type: 'bar',
-            data: {
-                labels: engByUtil.map(e => e.name),
-                datasets: [{
-                    label: '가동률(%)',
-                    data: engByUtil.map(e => Math.round(e.utilPct * 10) / 10),
-                    backgroundColor: utilColors,
-                    borderColor: utilBorders,
-                    borderWidth: 1,
-                    borderRadius: 4,
-                    maxBarThickness: 28
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                onClick: makeDrilldownClick('엔지니어', true),
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => {
-                                const e = engByUtil[ctx.dataIndex];
-                                return [
-                                    ` 가동률: ${e.utilPct.toFixed(1)}%`,
-                                    ` 가동시간: ${e.billableH.toFixed(1)}h`,
-                                    ` 소정근무: ${e.workingH}h (${contractWorkDays}일×${CONFIG.WORK_HOURS_PER_DAY}h)`
-                                ];
-                            }
-                        }
-                    },
-                    annotation: undefined
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        max: Math.max(120, Math.ceil(Math.max(...engByUtil.map(e => e.utilPct)) / 10) * 10 + 10),
-                        ticks: { callback: v => v + '%', font: { size: 11 } },
-                        title: { display: true, text: '가동률 (%)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }
-                    },
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '엔지니어', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        });
-
-        const teamMap = {};
-        engEntries.forEach(([, m]) => {
-            const dept = m.dept || '미지정';
-            if (!teamMap[dept]) teamMap[dept] = { billableH: 0, workingH: 0, engCount: 0, totalH: 0 };
-            const tm = teamMap[dept];
-            tm.billableH += m.billableHours;
-            tm.workingH += engContractWorkH;
-            tm.totalH += m.hours;
-            tm.engCount++;
-        });
-        const teamEntries = Object.entries(teamMap).sort((a, b) => a[0].localeCompare(b[0]));
-        const teamNames = teamEntries.map(e => e[0]);
-        const teamUtilPcts = teamEntries.map(e => e[1].workingH > 0 ? Math.round((e[1].billableH / e[1].workingH) * 1000) / 10 : 0);
-        const teamUtilLegendEl = document.getElementById('teamUtilLegend');
-        if (teamUtilLegendEl) teamUtilLegendEl.innerHTML = buildDeptLegendHTML(teamNames);
-        upsertChart('chartTeamUtil', {
-            type: 'bar',
-            data: {
-                labels: teamNames,
-                datasets: [
-                    {
-                        label: '가동률(%)',
-                        data: teamUtilPcts,
-                        backgroundColor: teamNames.map(n => getDeptColor(n).color + 'CC'),
-                        borderColor: teamNames.map(n => getDeptColor(n).color),
-                        borderWidth: 2, borderRadius: 6, maxBarThickness: 80,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: '가동시간(h)',
-                        data: teamEntries.map(e => Math.round(e[1].billableH * 10) / 10),
-                        type: 'line',
-                        borderColor: '#EF4444', backgroundColor: '#EF444422',
-                        pointRadius: 6, pointHoverRadius: 8, tension: 0,
-                        yAxisID: 'y1', order: 0
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } },
-                    tooltip: {
-                        callbacks: {
-                            afterBody: (items) => {
-                                const idx = items[0].dataIndex;
-                                const te = teamEntries[idx][1];
-                                return [
-                                    `소정근무: ${te.workingH}h`,
-                                    `엔지니어: ${te.engCount}명`,
-                                    `총투입시간: ${te.totalH.toFixed(0)}h`
-                                ];
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { ticks: { font: { size: 13, weight: '600' } }, grid: { display: false }, title: { display: true, text: '팀(부서)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    y: { beginAtZero: true, title: { display: true, text: '가동률(%)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { callback: v => v + '%', font: { size: 11 } } },
-                    y1: { beginAtZero: true, position: 'right', title: { display: true, text: '가동시간(h)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { font: { size: 11 } }, grid: { drawOnChartArea: false } }
-                }
-            }
-        });
-
-        const maxVals = { count: 0, hours: 0, custs: 0, prods: 0, dates: 0 };
-        engEntries.forEach(([, m]) => {
-            if (m.count > maxVals.count) maxVals.count = m.count;
-            if (m.hours > maxVals.hours) maxVals.hours = m.hours;
-            if (m.custs.size > maxVals.custs) maxVals.custs = m.custs.size;
-            if (m.prods.size > maxVals.prods) maxVals.prods = m.prods.size;
-            if (m.dates.size > maxVals.dates) maxVals.dates = m.dates.size;
-        });
-        const radarTop5 = engEntries.slice(0, CONFIG.CHART_TOP_N.RADAR);
-        upsertChart('chartEngRadar', {
-            type: 'radar',
-            data: {
-                labels: ['지원건수', '투입시간', '고객사수', '제품다양성', '활동일수'],
-                datasets: radarTop5.map(([name, m], i) => ({
-                    label: name,
-                    data: [
-                        maxVals.count > 0 ? (m.count / maxVals.count * 100).toFixed(0) : 0,
-                        maxVals.hours > 0 ? (m.hours / maxVals.hours * 100).toFixed(0) : 0,
-                        maxVals.custs > 0 ? (m.custs.size / maxVals.custs * 100).toFixed(0) : 0,
-                        maxVals.prods > 0 ? (m.prods.size / maxVals.prods * 100).toFixed(0) : 0,
-                        maxVals.dates > 0 ? (m.dates.size / maxVals.dates * 100).toFixed(0) : 0
-                    ],
-                    borderColor: COLORS[i % COLORS.length],
-                    backgroundColor: COLORS[i % COLORS.length] + '22',
-                    borderWidth: 2,
-                    pointBackgroundColor: COLORS[i % COLORS.length],
-                    pointRadius: 3
-                }))
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } },
-                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.r}%` } }
-                },
-                scales: {
-                    r: { beginAtZero: true, max: 100, ticks: { stepSize: 25, font: { size: 10 } }, pointLabels: { font: { size: 12, family: 'Noto Sans KR' } } }
-                }
-            }
-        });
-
-        const engNames = engEntries.map(e => e[0]);
-        upsertChart('chartEngIntExt', {
-            type: 'bar',
-            data: {
-                labels: engNames,
-                datasets: [
-                    { label: '외부 고객지원', data: engEntries.map(e => e[1].external), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1 },
-                    { label: '내부 업무', data: engEntries.map(e => e[1].internal), backgroundColor: '#F59E0BCC', borderColor: '#F59E0B', borderWidth: 1 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true } },
-                    tooltip: { callbacks: { label: ctx => { const total = ctx.chart.data.datasets.reduce((s, ds) => s + (ds.data[ctx.dataIndex] || 0), 0); const pct = total > 0 ? ((ctx.parsed.x / total) * 100).toFixed(0) : 0; return ` ${ctx.dataset.label}: ${ctx.parsed.x}건 (${pct}%)`; } } }
-                },
-                scales: { x: { stacked: true, ticks: { font: { size: 11 } }, title: { display: true, text: '건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }, y: { stacked: true, ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '엔지니어', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } } }
-            }
-        });
-
-        const engByHours = engEntries.sort((a, b) => b[1].hours - a[1].hours);
-        const hourColors = engByHours.map(e => getDeptColor(e[1].dept).color + 'CC');
-        const engHoursLegendEl = document.getElementById('engHoursLegend');
-        if (engHoursLegendEl) engHoursLegendEl.innerHTML = buildDeptLegendHTML(getAllDeptNames(data));
-        upsertChart('chartEngHours', barChartConfig(
-            engByHours.map(e => e[0]),
-            engByHours.map(e => Math.round(e[1].hours * 10) / 10),
-            '투입시간(h)', hourColors, true, '시간(h)', '엔지니어'
-        ));
-        engEntries.sort((a, b) => b[1].count - a[1].count);
-
-        const engDaily = aggregateByKeyAndDate(data, '엔지니어');
-        const allDatesEng = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
-        const top6Eng = engEntries.slice(0, CONFIG.CHART_TOP_N.TREND).map(e => e[0]);
-        upsertChart('chartEngDaily', lineChartConfig(
-            allDatesEng,
-            top6Eng.map((name, i) => ({
-                label: name, data: allDatesEng.map(d => (engDaily[name] || {})[d] || 0),
-                borderColor: COLORS[i % COLORS.length], tension: 0.3, pointRadius: 2
-            })),
-            '건수', '날짜'
-        ));
-
-        const allProds = [...new Set(data.map(r => String(r['제품명'] || '').trim()).filter(Boolean))];
-        const engProd = crossTab(data, '엔지니어', '제품명');
-        const engNamesForStack = engEntries.map(e => e[0]);
-        upsertChart('chartEngProduct', stackedBarConfig(
-            engNamesForStack,
-            allProds.slice(0, 12).map((p, i) => ({
-                label: p, data: engNamesForStack.map(n => (engProd[n] || {})[p] || 0),
-                backgroundColor: COLORS[i % COLORS.length] + 'CC', borderColor: COLORS[i % COLORS.length], borderWidth: 1
-            })),
-            true, '건수', '엔지니어'
-        ));
-
-        const allTypes = [...new Set(data.map(r => String(r['지원유형'] || '').trim()).filter(Boolean))];
-        const engTypeX = crossTab(data, '엔지니어', '지원유형');
-        let maxHM = 0;
-        const hmNames = engEntries.map(e => e[0]);
-        const hmMatrix = hmNames.map(eng => allTypes.map(t => { const v = (engTypeX[eng] || {})[t] || 0; if (v > maxHM) maxHM = v; return v; }));
-        document.getElementById('engHeatmap').innerHTML = buildHeatmapHTML(hmNames, allTypes, hmMatrix, maxHM);
-
-        let scHtml = '<table class="scorecard-table"><thead><tr><th>엔지니어</th><th>부서</th><th>건수</th><th>시간(h)</th><th>건당시간</th><th>활동일</th><th>건/일</th><th>고객사</th><th>제품수</th><th>가동시간</th><th>소정근무</th><th>가동률</th><th>직전 대비</th><th>업무강도</th></tr></thead><tbody>';
-        engEntries.forEach(([name, m]) => {
-            const daysActive = m.dates.size || 1;
-            const perDay = (m.count / daysActive).toFixed(1);
-            const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
-            const deptColorInfo = getDeptColor(m.dept);
-            const billH = m.billableHours;
-            const workH = engContractWorkH;
-            const utilPctEng = workH > 0 ? (billH / workH) * 100 : 0;
-            const utilBadge = utilPctEng >= CONFIG.UTIL.TARGET ? 'low' : utilPctEng >= CONFIG.UTIL.DANGER ? 'mid' : 'high';
-            const intensity = m.hours / daysActive;
-            const intBadge = intensity >= 10 ? 'high' : intensity >= 7 ? 'mid' : 'low';
-            const intLabel = intensity >= 10 ? '과부하' : intensity >= 7 ? '적정' : '여유';
-            const prevM = prevEngMap[name] || null;
-            let compareText = compareContext.previousData.length ? '신규' : '비교없음';
-            let compareBadge = compareContext.previousData.length ? 'mid' : 'low';
-            if (prevM) {
-                const prevUtil = prevEngContractWorkH > 0 ? (prevM.billableHours / prevEngContractWorkH) * 100 : 0;
-                const countDelta = m.count - prevM.count;
-                const utilDelta = utilPctEng - prevUtil;
-                compareText = `${countDelta >= 0 ? '+' : ''}${countDelta}건 / ${utilDelta >= 0 ? '+' : ''}${utilDelta.toFixed(1)}%p`;
-                compareBadge = utilDelta > 2 || countDelta > 0 ? 'low' : utilDelta < -2 || countDelta < 0 ? 'high' : 'mid';
-            }
-            scHtml += `<tr><td>${safeInlineText(name)}</td><td><span class="sc-dept" style="background:${deptColorInfo.bg};color:${deptColorInfo.color}">${safeInlineText(m.dept)}</span></td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${daysActive}</td><td>${perDay}</td><td>${m.custs.size}</td><td>${m.prods.size}</td><td>${billH.toFixed(1)}h</td><td>${workH}h</td><td><span class="sc-badge ${utilBadge}">${utilPctEng.toFixed(1)}%</span></td><td><span class="sc-badge ${compareBadge}">${safeInlineText(compareText)}</span></td><td><span class="sc-badge ${intBadge}">${intLabel} (${intensity.toFixed(1)}h/일)</span></td></tr>`;
-        });
-        scHtml += '</tbody></table>';
-        document.getElementById('engScorecard').innerHTML = scHtml;
+        return engineerTab.updateEngineerTab();
     }
 
     /* ============================================================
        TAB 3: 제품 분석 (전면 재설계)
        ============================================================ */
     function updateProductTab() {
-        const data = filteredData;
-        const prodMap = aggregateProducts(data);
-        const prodEntries = Object.entries(prodMap).sort((a, b) => b[1].count - a[1].count);
-
-        if (!prodEntries.length) {
-            document.getElementById('prodKpiRow').innerHTML = '';
-            document.getElementById('prodHeatmap').innerHTML = '';
-            document.getElementById('prodScorecard').innerHTML = '';
-            return;
-        }
-
-        // === KPI 미니 ===
-        const totalProdH = prodEntries.reduce((s, e) => s + e[1].hours, 0);
-        const totalCust = new Set(); prodEntries.forEach(e => e[1].custs.forEach(c => totalCust.add(c)));
-        const totalEngs = new Set(); prodEntries.forEach(e => e[1].engs.forEach(en => totalEngs.add(en)));
-        const avgPerProd = (prodEntries.reduce((s, e) => s + e[1].count, 0) / prodEntries.length).toFixed(1);
-        const singleEngProds = prodEntries.filter(e => e[1].engs.size <= 1).length;
-        document.getElementById('prodKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">지원 제품 수</div><div class="kpi-mini-value">${prodEntries.length}</div><div class="kpi-mini-sub">종</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalProdH.toFixed(0)}</div><div class="kpi-mini-sub">시간(h)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">제품당 평균</div><div class="kpi-mini-value">${avgPerProd}</div><div class="kpi-mini-sub">건/제품</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">연관 고객사</div><div class="kpi-mini-value">${totalCust.size}</div><div class="kpi-mini-sub">곳</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">⚠ 단일엔지니어 제품</div><div class="kpi-mini-value">${singleEngProds}</div><div class="kpi-mini-sub">종 (리스크)</div></div>
-            `;
-
-        // ① 포트폴리오 맵 버블: X=고객사수, Y=건수, R=엔지니어수
-        const bubbleData = prodEntries.map((e, i) => ({
-            label: e[0],
-            data: [{ x: e[1].custs.size, y: e[1].count, r: Math.max(5, e[1].engs.size * 4) }],
-            backgroundColor: COLORS[i % COLORS.length] + '99',
-            borderColor: COLORS[i % COLORS.length], borderWidth: 1
-        }));
-        upsertChart('chartProdBubble', {
-            type: 'bubble', data: { datasets: bubbleData },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } },
-                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: 고객사 ${ctx.parsed.x}곳, ${ctx.parsed.y}건, 엔지니어 ${Math.round(ctx.raw.r / 4)}명` } }
-                },
-                scales: {
-                    x: { title: { display: true, text: '고객사 수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true },
-                    y: { title: { display: true, text: '지원 건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true }
-                }
-            }
-        });
-
-        // ② 제품군별 도넛
-        const groupCounts = {};
-        data.forEach(r => {
-            const p = String(r['제품명'] || '').trim();
-            if (!p) return;
-            const g = productGroupOf(p);
-            groupCounts[g] = (groupCounts[g] || 0) + 1;
-        });
-        const gEntries = Object.entries(groupCounts).sort((a, b) => b[1] - a[1]);
-        upsertChart('chartProdGroup', pieChartConfig(gEntries.map(e => e[0]), gEntries.map(e => e[1])));
-
-        // ③ 제품별 건수 vs 투입시간 이중축 차트 (건당시간 효율 분석)
-        const topProdNames10 = prodEntries.slice(0, 10).map(e => e[0]);
-        upsertChart('chartProdEfficiency', {
-            type: 'bar',
-            data: {
-                labels: topProdNames10,
-                datasets: [
-                    { label: '지원건수', data: topProdNames10.map(p => prodMap[p].count), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4, yAxisID: 'y', order: 2 },
-                    { label: '투입시간(h)', data: topProdNames10.map(p => Math.round(prodMap[p].hours * 10) / 10), type: 'line', borderColor: '#EF4444', backgroundColor: '#EF444422', pointRadius: 4, pointHoverRadius: 6, tension: 0.3, yAxisID: 'y1', order: 1, fill: true }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } },
-                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const p = topProdNames10[idx]; const m = prodMap[p]; const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-'; return `건당 소요: ${perCase}h`; } } }
-                },
-                scales: {
-                    x: { ticks: { font: { size: 11 }, maxRotation: 45 }, grid: { display: false }, title: { display: true, text: '제품명', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    y: { beginAtZero: true, position: 'left', title: { display: true, text: '건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { stepSize: 5, font: { size: 11 } } },
-                    y1: { beginAtZero: true, position: 'right', title: { display: true, text: '시간(h)', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { font: { size: 11 } }, grid: { drawOnChartArea: false } }
-                }
-            }
-        });
-
-        // ④ 제품별 지원유형 구성 (대분류 스택바)
-        const catNames = ['기술지원', '점검지원', 'Presales', '내부업무', '셀프스터디', '교육', '기타'];
-        const catColors = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#9CA3AF'];
-        const topProdNames = prodEntries.slice(0, 10).map(e => e[0]);
-        const prodCatMap = {};
-        data.forEach(r => {
-            const p = String(r['제품명'] || '').trim();
-            const t = String(r['지원유형'] || '').trim();
-            if (!p || !t) return;
-            if (!prodCatMap[p]) prodCatMap[p] = {};
-            const cat = r._typeCategory || typeCategoryOf(t);
-            prodCatMap[p][cat] = (prodCatMap[p][cat] || 0) + 1;
-        });
-        upsertChart('chartProdTypeComp', stackedBarConfig(
-            topProdNames,
-            catNames.map((cat, i) => ({
-                label: cat, data: topProdNames.map(p => (prodCatMap[p] || {})[cat] || 0),
-                backgroundColor: catColors[i] + 'CC', borderColor: catColors[i], borderWidth: 1
-            })),
-            true, '건수', '제품명'
-        ));
-
-        // ⑤ 제품별 부서 투입 비중 (동적 부서 색상)
-        const prodDeptMap = {};
-        data.forEach(r => {
-            const p = String(r['제품명'] || '').trim();
-            const d = String(r['부서명'] || '').trim();
-            if (!p || !d) return;
-            if (!prodDeptMap[p]) prodDeptMap[p] = {};
-            prodDeptMap[p][d] = (prodDeptMap[p][d] || 0) + 1;
-        });
-        const depts = [...new Set(data.map(r => String(r['부서명'] || '').trim()).filter(Boolean))].sort();
-        // 레전드 동적 생성
-        const prodDeptLegendEl = document.getElementById('prodDeptLegend');
-        if (prodDeptLegendEl) prodDeptLegendEl.innerHTML = buildDeptLegendHTML(depts);
-        upsertChart('chartProdDept', stackedBarConfig(
-            topProdNames,
-            depts.map(d => ({
-                label: d, data: topProdNames.map(p => (prodDeptMap[p] || {})[d] || 0),
-                backgroundColor: getDeptColor(d).color + 'CC',
-                borderColor: getDeptColor(d).color, borderWidth: 1
-            })),
-            true, '건수', '제품명'
-        ));
-
-        // ⑥ 일별 추이
-        const prodDaily = aggregateByKeyAndDate(data, '제품명');
-        const allDates = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
-        const topProds = prodEntries.slice(0, 6).map(e => e[0]);
-        upsertChart('chartProdDaily', lineChartConfig(
-            allDates,
-            topProds.map((name, i) => ({
-                label: name, data: allDates.map(d => (prodDaily[name] || {})[d] || 0),
-                borderColor: COLORS[i % COLORS.length], tension: 0.3, pointRadius: 2
-            })),
-            '건수', '날짜'
-        ));
-
-        // ⑦ 히트맵: 제품 × 엔지니어
-        const allEngs = [...new Set(data.map(r => String(r['엔지니어'] || '').trim()).filter(Boolean))];
-        const prodEngX = crossTab(data, '제품명', '엔지니어');
-        let maxPH = 0;
-        const phMatrix = prodEntries.map(([prod]) => allEngs.map(eng => { const v = (prodEngX[prod] || {})[eng] || 0; if (v > maxPH) maxPH = v; return v; }));
-        document.getElementById('prodHeatmap').innerHTML = buildHeatmapHTML(prodEntries.map(e => e[0]), allEngs, phMatrix, maxPH);
-
-        // ⑧ 스코어카드 (확장: 건당시간, 부서 비율 추가)
-        const scDepts = getAllDeptNames(data);
-        let pscHtml = '<table class="scorecard-table"><thead><tr><th>제품</th><th>제품군</th><th>건수</th><th>시간(h)</th><th>건당시간</th><th>고객사</th><th>엔지니어</th><th>부서별 비율</th><th>엔지니어 의존도</th></tr></thead><tbody>';
-        prodEntries.forEach(([name, m]) => {
-            const grp = productGroupOf(name);
-            const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
-            const deptRatioStr = scDepts.map(d => {
-                const cnt = (prodDeptMap[name] || {})[d] || 0;
-                return cnt > 0 ? `${d.replace(/\s/g, '')}:${cnt}` : null;
-            }).filter(Boolean).join(' / ') || '-';
-            const depRisk = m.engs.size <= 1 ? 'high' : m.engs.size <= 2 ? 'mid' : 'low';
-            const depLabel = m.engs.size <= 1 ? '⚠ 단일' : m.engs.size <= 2 ? '주의' : '양호';
-            pscHtml += `<tr><td>${safeInlineText(name)}</td><td>${safeInlineText(grp)}</td><td><strong>${m.count}</strong></td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td>${m.custs.size}</td><td>${m.engs.size}명</td><td style="font-size:10px;white-space:nowrap">${safeInlineText(deptRatioStr)}</td><td><span class="sc-badge ${depRisk}">${depLabel} (${m.engs.size}명)</span></td></tr>`;
-        });
-        pscHtml += '</tbody></table>';
-        document.getElementById('prodScorecard').innerHTML = pscHtml;
+        return productTab.updateProductTab();
     }
 
     /* ============================================================
        TAB 4: 지원유형 분석 (전면 재설계)
        ============================================================ */
     function updateSupportTab() {
-        const data = filteredData;
-        if (!data.length) {
-            document.getElementById('typeKpiRow').innerHTML = '';
-            document.getElementById('typeScorecard').innerHTML = '';
-            return;
-        }
-
-        // 사전 집계
-        let totalInternal = 0, totalExternal = 0, totalVisit = 0, totalRemote = 0, totalOther = 0;
-        let totalHoursAll = 0;
-        const catCounts = {}, typeCounts = {}, typeHours = {}, typeEngs = {}, typeCusts = {};
-        const catDates = {};
-        data.forEach(r => {
-            const t = String(r['지원유형'] || '').trim();
-            if (!t) return;
-            typeCounts[t] = (typeCounts[t] || 0) + 1;
-            const h = Number(r._hoursNum) || 0;
-            typeHours[t] = (typeHours[t] || 0) + h;
-            totalHoursAll += h;
-            const eng = String(r['엔지니어'] || '').trim();
-            if (eng) { if (!typeEngs[t]) typeEngs[t] = new Set(); typeEngs[t].add(eng); }
-            const cust = String(r['고객사명'] || '').trim();
-            if (cust) { if (!typeCusts[t]) typeCusts[t] = new Set(); typeCusts[t].add(cust); }
-            if (r._isInternal) totalInternal++; else totalExternal++;
-            const vt = r._visitType || visitTypeOf(t);
-            if (vt === '방문') totalVisit++; else if (vt === '원격') totalRemote++; else totalOther++;
-            const cat = r._typeCategory || typeCategoryOf(t);
-            catCounts[cat] = (catCounts[cat] || 0) + 1;
-            if (r._dateStr) {
-                if (!catDates[cat]) catDates[cat] = {};
-                catDates[cat][r._dateStr] = (catDates[cat][r._dateStr] || 0) + 1;
-            }
-        });
-
-        // === KPI 미니 ===
-        const extPct = data.length > 0 ? ((totalExternal / data.length) * 100).toFixed(1) : 0;
-        const visitPct = (totalVisit + totalRemote) > 0 ? ((totalVisit / (totalVisit + totalRemote)) * 100).toFixed(1) : 0;
-        const uniqueTypes = Object.keys(typeCounts).length;
-        const avgHPerCase = data.length > 0 ? (totalHoursAll / data.length).toFixed(1) : 0;
-        document.getElementById('typeKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">지원유형 종류</div><div class="kpi-mini-value">${uniqueTypes}</div><div class="kpi-mini-sub">가지</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">외부 고객지원</div><div class="kpi-mini-value">${totalExternal}</div><div class="kpi-mini-sub">${extPct}% of 전체</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">방문 지원</div><div class="kpi-mini-value">${totalVisit}</div><div class="kpi-mini-sub">방문비율 ${visitPct}%</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">건당 평균시간</div><div class="kpi-mini-value">${avgHPerCase}h</div><div class="kpi-mini-sub">총 ${totalHoursAll.toFixed(0)}h</div></div>
-            `;
-
-        // ① 대분류 도넛
-        const catEntries = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
-        upsertChart('chartTypeCat', pieChartConfig(catEntries.map(e => e[0]), catEntries.map(e => e[1])));
-
-        // ② 방문 vs 원격 파이
-        upsertChart('chartTypeVisitRemote', {
-            type: 'doughnut',
-            data: {
-                labels: ['방문', '원격', '기타(내부)'],
-                datasets: [{
-                    data: [totalVisit, totalRemote, totalOther],
-                    backgroundColor: ['#4F46E5CC', '#0EA5E9CC', '#F59E0BCC'],
-                    borderColor: ['#4F46E5', '#0EA5E9', '#F59E0B'], borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'right', labels: { font: { size: 12, family: 'Noto Sans KR' }, padding: 12, usePointStyle: true } },
-                    tooltip: { callbacks: { label: ctx => { const total = ctx.dataset.data.reduce((a, b) => a + b, 0); return ` ${ctx.label}: ${ctx.parsed}건 (${((ctx.parsed / total) * 100).toFixed(1)}%)`; } } }
-                }
-            }
-        });
-
-        // ③ 지원유형별 건수 vs 투입시간 이중축 차트
-        const typeEntries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
-        const topTypeNames = typeEntries.slice(0, 12).map(e => e[0]);
-        upsertChart('chartTypeCountHours', {
-            type: 'bar',
-            data: {
-                labels: topTypeNames,
-                datasets: [
-                    { label: '건수', data: topTypeNames.map(t => typeCounts[t] || 0), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4, yAxisID: 'y', order: 2 },
-                    { label: '투입시간(h)', data: topTypeNames.map(t => Math.round((typeHours[t] || 0) * 10) / 10), type: 'line', borderColor: '#EF4444', backgroundColor: '#EF444422', pointRadius: 4, pointHoverRadius: 6, tension: 0.3, yAxisID: 'y1', order: 1, fill: true }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } },
-                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const t = topTypeNames[idx]; const cnt = typeCounts[t] || 0; const hrs = typeHours[t] || 0; const perCase = cnt > 0 ? (hrs / cnt).toFixed(1) : '-'; return `건당 소요: ${perCase}h`; } } }
-                },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false } },
-                    x: { beginAtZero: true, position: 'bottom', title: { display: true, text: '건수', font: { size: 11 } }, ticks: { font: { size: 11 } } },
-                    y1: { display: false, beginAtZero: true }
-                }
-            }
-        });
-
-        // ④ 대분류별 일별 추이 (라인)
-        const allDates = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
-        const catColorMap = { '기술지원': '#4F46E5', '점검지원': '#0EA5E9', 'Presales': '#10B981', '내부업무': '#F59E0B', '셀프스터디': '#EC4899', '교육': '#8B5CF6', '기타': '#9CA3AF' };
-        upsertChart('chartTypeTrend', lineChartConfig(
-            allDates,
-            catEntries.map(([cat]) => ({
-                label: cat,
-                data: allDates.map(d => (catDates[cat] || {})[d] || 0),
-                borderColor: catColorMap[cat] || '#9CA3AF',
-                tension: 0.3, pointRadius: 2, fill: false
-            }))
-        ));
-
-        // ⑤ 부서별 업무유형 비중 (100% 스택바)
-        const deptCatMap = {};
-        data.forEach(r => {
-            const dept = String(r['부서명'] || '').trim();
-            const t = String(r['지원유형'] || '').trim();
-            if (!dept || !t) return;
-            const cat = r._typeCategory || typeCategoryOf(t);
-            if (!deptCatMap[dept]) deptCatMap[dept] = {};
-            deptCatMap[dept][cat] = (deptCatMap[dept][cat] || 0) + 1;
-        });
-        const depts = Object.keys(deptCatMap).sort();
-        const catKeys = catEntries.map(e => e[0]);
-        upsertChart('chartTypeDeptComp', stackedBarConfig(
-            depts,
-            catKeys.map((cat, i) => ({
-                label: cat, data: depts.map(d => (deptCatMap[d] || {})[cat] || 0),
-                backgroundColor: (catColorMap[cat] || '#9CA3AF') + 'CC',
-                borderColor: catColorMap[cat] || '#9CA3AF', borderWidth: 1
-            })),
-            false
-        ));
-
-        // ⑥ 지원유형별 엔지니어 투입수 (인력 분산 분석)
-        const typeEngCounts = typeEntries.slice(0, 12).map(([t]) => ({ name: t, engCnt: typeEngs[t] ? typeEngs[t].size : 0, custCnt: typeCusts[t] ? typeCusts[t].size : 0 }));
-        upsertChart('chartTypeEngCount', {
-            type: 'bar',
-            data: {
-                labels: typeEngCounts.map(e => e.name),
-                datasets: [
-                    { label: '투입 엔지니어수', data: typeEngCounts.map(e => e.engCnt), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4 },
-                    { label: '관련 고객사수', data: typeEngCounts.map(e => e.custCnt), backgroundColor: '#10B981CC', borderColor: '#10B981', borderWidth: 1, borderRadius: 4 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: { legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } } },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '지원유형', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, title: { display: true, text: '수량', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        });
-
-        // ⑦ 히트맵: 지원유형 × 제품
-        const allProdsForType = [...new Set(data.map(r => String(r['제품명'] || '').trim()).filter(Boolean))];
-        const typeProdsX = crossTab(data, '지원유형', '제품명');
-        let maxTH = 0;
-        const thNames = typeEntries.map(e => e[0]);
-        const thMatrix = thNames.map(t => allProdsForType.map(p => { const v = (typeProdsX[t] || {})[p] || 0; if (v > maxTH) maxTH = v; return v; }));
-        document.getElementById('typeHeatmap').innerHTML = buildHeatmapHTML(thNames, allProdsForType, thMatrix, maxTH);
-
-        // ⑧ 스코어카드 (확장: 고객사수, 건당시간 추가)
-        const totalAll = typeEntries.reduce((s, e) => s + e[1], 0);
-        let tscHtml = '<table class="scorecard-table"><thead><tr><th>지원유형</th><th>대분류</th><th>방문/원격</th><th>건수</th><th>비율</th><th>총시간(h)</th><th>건당시간</th><th>엔지니어</th><th>고객사</th></tr></thead><tbody>';
-        typeEntries.forEach(([name, cnt]) => {
-            const cat = typeCategoryOf(name);
-            const vr = visitTypeOf(name);
-            const pct = totalAll > 0 ? ((cnt / totalAll) * 100).toFixed(1) : 0;
-            const hrs = typeHours[name] || 0;
-            const perCase = cnt > 0 ? (hrs / cnt).toFixed(1) : '-';
-            const engCnt = typeEngs[name] ? typeEngs[name].size : 0;
-            const custCnt = typeCusts[name] ? typeCusts[name].size : 0;
-            const vrBadge = vr === '방문' ? 'high' : vr === '원격' ? 'mid' : 'low';
-            tscHtml += `<tr><td>${safeInlineText(name)}</td><td>${safeInlineText(cat)}</td><td><span class="sc-badge ${vrBadge}">${safeInlineText(vr)}</span></td><td><strong>${cnt}</strong></td><td>${pct}%</td><td>${hrs.toFixed(1)}</td><td>${perCase}h</td><td>${engCnt}명</td><td>${custCnt}곳</td></tr>`;
-        });
-        tscHtml += '</tbody></table>';
-        document.getElementById('typeScorecard').innerHTML = tscHtml;
+        return supportTab.updateSupportTab();
     }
 
     /* ============================================================
        TAB 5: 고객사 분석 (전면 재설계)
        ============================================================ */
     function updateCustomerTab() {
-        const data = filteredData;
-        const compareContext = getComparablePeriodContext();
-        const custMap = aggregateCustomers(data);
-        const custEntries = Object.entries(custMap).sort((a, b) => b[1].count - a[1].count);
-
-        if (!custEntries.length) {
-            document.getElementById('custKpiRow').innerHTML = '';
-            document.getElementById('custScorecard').innerHTML = '';
-            return;
-        }
-
-        const prevCustMap = aggregateCustomers(compareContext.previousData);
-        const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, custMap: custMap });
-        const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, custMap: prevCustMap });
-        const customerTransition = summarizeEntityTransition(currentSummary.customerSet, previousSummary.customerSet);
-        const multiProdCust = custEntries.filter(e => e[1].prods.size >= 2).length;
-        const topCust = custEntries[0];
-
-        document.getElementById('custKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">지원 고객사</div><div class="kpi-mini-value">${currentSummary.activeCustomerCount}</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.activeCustomerCount, previousSummary.activeCustomerCount, { decimals: 0, unit: '곳' })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">반복 고객 비율</div><div class="kpi-mini-value">${customerTransition.retainedRatio.toFixed(1)}%</div><div class="kpi-mini-sub">직전에도 지원 ${customerTransition.retainedCount}곳</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">신규 고객</div><div class="kpi-mini-value">${customerTransition.newCount}</div><div class="kpi-mini-sub">전체의 ${customerTransition.newRatio.toFixed(1)}%</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">단일엔지니어 의존</div><div class="kpi-mini-value">${currentSummary.singleEngineerCustomerRatio.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.singleEngineerCustomerRatio, previousSummary.singleEngineerCustomerRatio, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">Top3 고객 집중도</div><div class="kpi-mini-value">${currentSummary.top3CustomerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3CustomerShare, previousSummary.top3CustomerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">고객당 평균 엔지니어</div><div class="kpi-mini-value">${currentSummary.avgEngineersPerCustomer.toFixed(1)}</div><div class="kpi-mini-sub">멀티제품 고객 ${multiProdCust}곳 · 최다 ${safeInlineText(topCust[0])}</div></div>
-            `;
-
-        const topBubble = custEntries.slice(0, 20);
-        const bubbleData = topBubble.map((e, i) => ({
-            label: e[0],
-            data: [{ x: e[1].count, y: e[1].prods.size, r: Math.max(5, e[1].engs.size * 4) }],
-            backgroundColor: COLORS[i % COLORS.length] + '99',
-            borderColor: COLORS[i % COLORS.length], borderWidth: 1
-        }));
-        upsertChart('chartCustBubble', {
-            type: 'bubble', data: { datasets: bubbleData },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { font: { size: 10, family: 'Noto Sans KR' }, usePointStyle: true, padding: 8 } },
-                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x}건, 제품 ${ctx.parsed.y}종, 엔지니어 ${Math.round(ctx.raw.r / 4)}명` } }
-                },
-                scales: {
-                    x: { title: { display: true, text: '지원 건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true },
-                    y: { title: { display: true, text: '사용 제품 수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true, ticks: { stepSize: 1 } }
-                }
-            }
-        });
-
-        const top15 = custEntries.slice(0, 15);
-        const catNames = ['기술지원', '점검지원', 'Presales', '내부업무', '셀프스터디', '교육', '기타'];
-        const catColors2 = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#9CA3AF'];
-        const custCatMap = {};
-        data.forEach(r => {
-            const c = String(r['고객사명'] || '').trim();
-            const t = String(r['지원유형'] || '').trim();
-            if (!c || !t) return;
-            if (!custCatMap[c]) custCatMap[c] = {};
-            const cat = r._typeCategory || typeCategoryOf(t);
-            custCatMap[c][cat] = (custCatMap[c][cat] || 0) + 1;
-        });
-        const top15Names = top15.map(e => e[0]);
-        upsertChart('chartCustTypeComp', stackedBarConfig(
-            top15Names,
-            catNames.map((cat, i) => ({
-                label: cat, data: top15Names.map(c => (custCatMap[c] || {})[cat] || 0),
-                backgroundColor: catColors2[i] + 'CC', borderColor: catColors2[i], borderWidth: 1
-            })),
-            true, '건수', '고객사'
-        ));
-
-        upsertChart('chartCustEfficiency', {
-            type: 'bar',
-            data: {
-                labels: top15Names,
-                datasets: [
-                    { label: '지원건수', data: top15Names.map(c => custMap[c].count), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4, yAxisID: 'y', order: 2 },
-                    { label: '투입시간(h)', data: top15Names.map(c => Math.round(custMap[c].hours * 10) / 10), type: 'line', borderColor: '#EF4444', backgroundColor: '#EF444422', pointRadius: 4, pointHoverRadius: 6, tension: 0.3, yAxisID: 'y1', order: 1, fill: true }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } },
-                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const c = top15Names[idx]; const m = custMap[c]; const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-'; return `건당 소요: ${perCase}h | 엔지니어: ${m.engs.size}명 | 제품: ${m.prods.size}종`; } } }
-                },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '고객사', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    x: { beginAtZero: true, position: 'bottom', title: { display: true, text: '건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, ticks: { font: { size: 11 } } },
-                    y1: { display: false, beginAtZero: true }
-                }
-            }
-        });
-
-        const custDaily = aggregateByKeyAndDate(data, '고객사명');
-        const allDates = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
-        const top5 = custEntries.slice(0, 5).map(e => e[0]);
-        upsertChart('chartCustTrend', lineChartConfig(
-            allDates,
-            top5.map((name, i) => ({
-                label: name, data: allDates.map(d => (custDaily[name] || {})[d] || 0),
-                borderColor: COLORS[i % COLORS.length], tension: 0.3, pointRadius: 2
-            })),
-            '건수', '날짜'
-        ));
-
-        const salesMap = {};
-        data.forEach(r => {
-            const s = String(r['담당영업'] || '').trim();
-            const c = String(r['고객사명'] || '').trim();
-            if (!s) return;
-            if (!salesMap[s]) salesMap[s] = { count: 0, custs: new Set(), hours: 0 };
-            salesMap[s].count++;
-            salesMap[s].hours += Number(r._hoursNum) || 0;
-            if (c) salesMap[s].custs.add(c);
-        });
-        const salesEntries = Object.entries(salesMap).sort((a, b) => b[1].count - a[1].count);
-        upsertChart('chartCustSales', {
-            type: 'bar',
-            data: {
-                labels: salesEntries.map(e => e[0]),
-                datasets: [
-                    { label: '지원 건수', data: salesEntries.map(e => e[1].count), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4, xAxisID: 'x' },
-                    { label: '담당 고객사 수', data: salesEntries.map(e => e[1].custs.size), backgroundColor: '#10B981CC', borderColor: '#10B981', borderWidth: 1, borderRadius: 4, xAxisID: 'x1' }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, pointStyle: 'circle' } },
-                    tooltip: { callbacks: { afterBody: (items) => { const idx = items[0].dataIndex; const sm = salesEntries[idx][1]; return `총 시간: ${sm.hours.toFixed(1)}h`; } } }
-                },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false }, title: { display: true, text: '담당영업', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    x: { position: 'bottom', beginAtZero: true, ticks: { font: { size: 11 } }, title: { display: true, text: '건수 / 고객사수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } },
-                    x1: { display: false, beginAtZero: true }
-                }
-            }
-        });
-
-        const top20 = custEntries.slice(0, 20);
-        const riskColors = top20.map(e => {
-            const n = e[1].engs.size;
-            return n <= 1 ? '#EF4444CC' : n <= 2 ? '#F59E0BCC' : '#10B981CC';
-        });
-        upsertChart('chartCustEngRisk', barChartConfig(
-            top20.map(e => e[0]),
-            top20.map(e => e[1].engs.size),
-            '투입 엔지니어 수', riskColors, true, '엔지니어 수(명)', '고객사'
-        ));
-
-        const allProdsForCust = [...new Set(data.map(r => String(r['제품명'] || '').trim()).filter(Boolean))];
-        const custProdX = crossTab(data, '고객사명', '제품명');
-        let maxCH = 0;
-        const top20Names = top20.map(e => e[0]);
-        const chMatrix = top20Names.map(c => allProdsForCust.map(p => { const v = (custProdX[c] || {})[p] || 0; if (v > maxCH) maxCH = v; return v; }));
-        document.getElementById('custHeatmap').innerHTML = buildHeatmapHTML(top20Names, allProdsForCust, chMatrix, maxCH);
-
-        let cscHtml = '<table class="scorecard-table"><thead><tr><th>고객사</th><th>건수</th><th>비중</th><th>시간(h)</th><th>건당시간</th><th>제품</th><th>엔지니어</th><th>담당영업</th><th>고객 상태</th><th>직전 대비</th><th>인력 리스크</th></tr></thead><tbody>';
-        custEntries.slice(0, 30).forEach(([name, m]) => {
-            const risk = m.engs.size <= 1 ? 'high' : m.engs.size <= 2 ? 'mid' : 'low';
-            const riskLabel = m.engs.size <= 1 ? '위험' : m.engs.size <= 2 ? '주의' : '양호';
-            const prodsStr = [...m.prods].slice(0, 3).join(', ') + (m.prods.size > 3 ? ` +${m.prods.size - 3}` : '');
-            const salesStr = [...m.sales].join(', ');
-            const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
-            const share = currentSummary.dataCount > 0 ? ((m.count / currentSummary.dataCount) * 100) : 0;
-            const prevM = prevCustMap[name] || null;
-            const lifecycleLabel = prevM ? '반복' : (compareContext.previousData.length ? '신규' : '비교없음');
-            const lifecycleBadge = prevM ? 'low' : 'mid';
-            let compareText = compareContext.previousData.length ? '신규' : '비교없음';
-            let compareBadge = compareContext.previousData.length ? 'mid' : 'low';
-            if (prevM) {
-                const countDelta = m.count - prevM.count;
-                const hoursDelta = m.hours - prevM.hours;
-                compareText = `${countDelta >= 0 ? '+' : ''}${countDelta}건 / ${hoursDelta >= 0 ? '+' : ''}${hoursDelta.toFixed(1)}h`;
-                compareBadge = countDelta > 0 || hoursDelta > 0 ? 'low' : countDelta < 0 || hoursDelta < 0 ? 'high' : 'mid';
-            }
-            cscHtml += `<tr><td>${safeInlineText(name)}</td><td><strong>${m.count}</strong></td><td>${share.toFixed(1)}%</td><td>${m.hours.toFixed(1)}</td><td>${perCase}h</td><td title="${escapeAttr([...m.prods].join(', '))}">${safeInlineText(prodsStr)}</td><td>${m.engs.size}명</td><td>${safeInlineText(salesStr)}</td><td><span class="sc-badge ${lifecycleBadge}">${safeInlineText(lifecycleLabel)}</span></td><td><span class="sc-badge ${compareBadge}">${safeInlineText(compareText)}</span></td><td><span class="sc-badge ${risk}">${riskLabel}</span></td></tr>`;
-        });
-        cscHtml += '</tbody></table>';
-        document.getElementById('custScorecard').innerHTML = cscHtml;
+        return customerTab.updateCustomerTab();
     }
-
-    /* ============================================================
-       TAB 6: 지원내역 상세 테이블
-       ============================================================ */
 
     /* ============================================================
        TAB 7: 담당영업별 분석
        ============================================================ */
     function updateSalesTab() {
-        const data = filteredData;
-        const salesMap = aggregateSales(data);
-        const salesEntries = Object.entries(salesMap).sort((a, b) => b[1].count - a[1].count);
-
-        if (!salesEntries.length) {
-            document.getElementById('salesKpiRow').innerHTML = '';
-            document.getElementById('salesScorecard').innerHTML = '';
-            document.getElementById('salesHeatmap').innerHTML = '<p style="color:var(--gray-400);text-align:center;padding:20px;">데이터 없음</p>';
-            return;
-        }
-
-        // === KPI 미니 ===
-        const totalSalesH = salesEntries.reduce((s, e) => s + e[1].hours, 0);
-        const allCusts = new Set(salesEntries.flatMap(([, m]) => [...m.custs]));
-        const topSales = salesEntries[0];
-        const avgCustPerSales = (allCusts.size / salesEntries.length).toFixed(1);
-        const heavyLoad = salesEntries.filter(([, m]) => m.custs.size > allCusts.size / salesEntries.length * 1.5).length;
-        document.getElementById('salesKpiRow').innerHTML = `
-                <div class="kpi-mini"><div class="kpi-mini-label">담당영업 수</div><div class="kpi-mini-value">${salesEntries.length}</div><div class="kpi-mini-sub">명</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">총 지원 건수</div><div class="kpi-mini-value">${data.length}</div><div class="kpi-mini-sub">건</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">총 투입시간</div><div class="kpi-mini-value">${totalSalesH.toFixed(0)}</div><div class="kpi-mini-sub">시간(h)</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">인당 평균 고객사</div><div class="kpi-mini-value">${avgCustPerSales}</div><div class="kpi-mini-sub">곳 / 인</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">최다 고객사 담당</div><div class="kpi-mini-value">${safeInlineText(topSales[0])}</div><div class="kpi-mini-sub">${topSales[1].custs.size}곳, ${topSales[1].count}건</div></div>
-            `;
-
-        // ① 포트폴리오 버블: X=고객사수, Y=건수, R=제품수
-        const bubbleData = salesEntries.map((e, i) => ({
-            label: e[0],
-            data: [{ x: e[1].custs.size, y: e[1].count, r: Math.max(5, e[1].prods.size * 4) }],
-            backgroundColor: COLORS[i % COLORS.length] + '99',
-            borderColor: COLORS[i % COLORS.length], borderWidth: 1
-        }));
-        upsertChart('chartSalesBubble', {
-            type: 'bubble', data: { datasets: bubbleData },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: true, position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } },
-                    tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: 고객사 ${ctx.parsed.x}곳, ${ctx.parsed.y}건, 제품 ${Math.round(ctx.raw.r / 4)}종` } }
-                },
-                scales: {
-                    x: { title: { display: true, text: '담당 고객사수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true, ticks: { stepSize: 1 } },
-                    y: { title: { display: true, text: '지원 건수', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' }, beginAtZero: true }
-                }
-            }
-        });
-
-        // ② 건수 vs 투입시간 이중축 (가로 막대)
-        const salesNames = salesEntries.map(e => e[0]);
-        upsertChart('chartSalesCountHours', {
-            type: 'bar',
-            data: {
-                labels: salesNames,
-                datasets: [
-                    { label: '지원건수', data: salesNames.map(s => salesMap[s].count), backgroundColor: '#4F46E5CC', borderColor: '#4F46E5', borderWidth: 1, borderRadius: 4, yAxisID: 'y', order: 2 },
-                    { label: '투입시간(h)', data: salesNames.map(s => Math.round(salesMap[s].hours * 10) / 10), type: 'line', borderColor: '#EF4444', backgroundColor: '#EF444422', pointRadius: 4, pointHoverRadius: 6, tension: 0.3, yAxisID: 'y1', order: 1, fill: true }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: {
-                    legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 12 } },
-                    tooltip: { callbacks: { afterBody: items => { const s = salesNames[items[0].dataIndex]; const cnt = salesMap[s].count; const hrs = salesMap[s].hours; return cnt > 0 ? `건당 평균: ${(hrs / cnt).toFixed(1)}h` : ''; } } }
-                },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false } },
-                    x: { beginAtZero: true, title: { display: true, text: '건수', font: { size: 11 } }, ticks: { font: { size: 11 } } },
-                    y1: { display: false, beginAtZero: true }
-                }
-            }
-        });
-
-        // ③ 담당영업별 지원유형 구성 스택바
-        const catNames = ['기술지원', '점검지원', 'Presales', '내부업무', '셀프스터디', '교육', '기타'];
-        const catColors = ['#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#9CA3AF'];
-        const salesCatMap = {};
-        for (let i = 0; i < data.length; i++) {
-            const s = String(data[i]['담당영업'] || '').trim();
-            const t = String(data[i]['지원유형'] || '').trim();
-            if (!s || !t) continue;
-            if (!salesCatMap[s]) salesCatMap[s] = {};
-            const cat = data[i]._typeCategory || typeCategoryOf(t);
-            salesCatMap[s][cat] = (salesCatMap[s][cat] || 0) + 1;
-        }
-        upsertChart('chartSalesTypeComp', stackedBarConfig(
-            salesNames,
-            catNames.map((cat, i) => ({
-                label: cat, data: salesNames.map(s => (salesCatMap[s] || {})[cat] || 0),
-                backgroundColor: catColors[i] + 'CC', borderColor: catColors[i], borderWidth: 1
-            })),
-            true, '건수', '담당영업'
-        ));
-
-        // ④ 담당영업별 고객사수 + 투입 엔지니어수 (가로 막대)
-        upsertChart('chartSalesCustEng', {
-            type: 'bar',
-            data: {
-                labels: salesNames,
-                datasets: [
-                    { label: '담당 고객사수', data: salesNames.map(s => salesMap[s].custs.size), backgroundColor: '#10B981CC', borderColor: '#10B981', borderWidth: 1, borderRadius: 4 },
-                    { label: '투입 엔지니어수', data: salesNames.map(s => salesMap[s].engs.size), backgroundColor: '#8B5CF6CC', borderColor: '#8B5CF6', borderWidth: 1, borderRadius: 4 }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-                plugins: { legend: { position: 'top', labels: { font: { size: 11, family: 'Noto Sans KR' }, usePointStyle: true, padding: 10 } } },
-                scales: {
-                    y: { ticks: { font: { size: 11 } }, grid: { display: false } },
-                    x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, title: { display: true, text: '수량', font: { size: 11, family: 'Noto Sans KR' }, color: '#6B7280' } }
-                }
-            }
-        });
-
-        // ⑤ Top 5 담당영업 일별 추이 (라인)
-        const salesDaily = aggregateByKeyAndDate(data, '담당영업');
-        const allDates = [...new Set(data.filter(r => r._dateStr).map(r => r._dateStr))].sort();
-        const top5Sales = salesEntries.slice(0, CONFIG.CHART_TOP_N.TREND).map(e => e[0]);
-        upsertChart('chartSalesDaily', lineChartConfig(
-            allDates,
-            top5Sales.map((s, i) => ({
-                label: s,
-                data: allDates.map(d => (salesDaily[s] || {})[d] || 0),
-                borderColor: COLORS[i % COLORS.length],
-                tension: 0.3, pointRadius: 2, fill: false
-            }))
-        ));
-
-        // ⑥ 담당영업 × 고객사 히트맵 (Top 10 고객사)
-        const topCustsForHM = Object.entries(
-            data.reduce((acc, r) => {
-                const c = String(r['고객사명'] || '').trim();
-                if (c) acc[c] = (acc[c] || 0) + 1;
-                return acc;
-            }, {})
-        ).sort((a, b) => b[1] - a[1]).slice(0, 10).map(e => e[0]);
-        const salesCustX = crossTab(data, '담당영업', '고객사명');
-        let maxHMVal = 0;
-        const hmMatrix = salesNames.map(s =>
-            topCustsForHM.map(c => { const v = (salesCustX[s] || {})[c] || 0; if (v > maxHMVal) maxHMVal = v; return v; })
-        );
-        document.getElementById('salesHeatmap').innerHTML = buildHeatmapHTML(salesNames, topCustsForHM, hmMatrix, maxHMVal);
-
-        // ⑦ 종합 스코어카드
-        const totalAll = salesEntries.reduce((s, e) => s + e[1].count, 0);
-        let scHtml = '<table class="scorecard-table"><thead><tr><th>담당영업</th><th>고객사수</th><th>건수</th><th>비율</th><th>총시간(h)</th><th>건당시간</th><th>제품수</th><th>투입엔지니어</th></tr></thead><tbody>';
-        salesEntries.forEach(([name, m]) => {
-            const pct = totalAll > 0 ? ((m.count / totalAll) * 100).toFixed(1) : 0;
-            const perCase = m.count > 0 ? (m.hours / m.count).toFixed(1) : '-';
-            scHtml += `<tr>
-                    <td><strong>${safeInlineText(name)}</strong></td>
-                    <td>${m.custs.size}곳</td>
-                    <td><strong>${m.count}</strong></td>
-                    <td>${pct}%</td>
-                    <td>${m.hours.toFixed(1)}</td>
-                    <td>${perCase}h</td>
-                    <td>${m.prods.size}종</td>
-                    <td>${m.engs.size}명</td>
-                </tr>`;
-        });
-        scHtml += '</tbody></table>';
-        document.getElementById('salesScorecard').innerHTML = scHtml;
+        return salesTab.updateSalesTab();
     }
-
 
     function updateDetailTab() {
         return tableUI.updateDetailTab();
