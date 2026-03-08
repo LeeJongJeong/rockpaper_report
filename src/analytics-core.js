@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     function createAnalyticsCore(deps) {
@@ -290,9 +290,19 @@
             const avgUtilPct = totalWorkingHours > 0 ? (billableHours / totalWorkingHours) * 100 : 0;
             const overTargetEngineers = engEntries.filter(([, metric]) => contractHoursPerEngineer > 0 && ((metric.billableHours / contractHoursPerEngineer) * 100) >= CONFIG.UTIL.TARGET).length;
             const underDangerEngineers = engEntries.filter(([, metric]) => contractHoursPerEngineer > 0 && ((metric.billableHours / contractHoursPerEngineer) * 100) < CONFIG.UTIL.DANGER).length;
-            const utilValues = engEntries.map(([, metric]) => contractHoursPerEngineer > 0 ? (metric.billableHours / contractHoursPerEngineer) * 100 : 0);
+            const engineerUtilEntries = engEntries.map(([name, metric]) => ({
+                name,
+                utilPct: contractHoursPerEngineer > 0 ? (metric.billableHours / contractHoursPerEngineer) * 100 : 0,
+                billableHours: metric.billableHours,
+                dept: metric.dept || ''
+            }));
+            const utilValues = engineerUtilEntries.map(entry => entry.utilPct);
             const maxUtilPct = utilValues.length ? Math.max(...utilValues) : 0;
             const minUtilPct = utilValues.length ? Math.min(...utilValues) : 0;
+            const topUtilEngineer = engineerUtilEntries.slice().sort((a, b) => {
+                if (b.utilPct !== a.utilPct) return b.utilPct - a.utilPct;
+                return b.billableHours - a.billableHours;
+            })[0] || null;
             const top3EngineerShare = billableHours > 0
                 ? (engEntries.slice(0, 3).reduce((sum, [, metric]) => sum + metric.billableHours, 0) / billableHours) * 100
                 : 0;
@@ -335,6 +345,7 @@
                 maxUtilPct,
                 minUtilPct,
                 utilSpread: maxUtilPct - minUtilPct,
+                topUtilEngineer,
                 topEngineer,
                 topCustomer,
                 engineerSet: new Set(engEntries.map(([name]) => name)),

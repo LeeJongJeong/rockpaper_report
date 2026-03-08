@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     /* ============================================================
@@ -278,6 +278,7 @@
     };
     const HOLIDAY_DATA = CONTRACT_UTILS.normalizeHolidayConfig(CONFIG.HOLIDAYS);
     let ACTIVE_HOLIDAY_SET = new Set();
+    let appShell = null;
     const dashboardUI = window.DASH_DASHBOARD_UI.createDashboardUI({
         Chart,
         COLORS,
@@ -358,14 +359,7 @@
     });
 
 
-    const filterUI = window.DASH_FILTER_UI.createFilterUI({
-        FILTER_COLUMNS,
-        CONFIG,
-        flatpickr,
-        escapeAttr,
-        safeInlineText,
-        formatNum,
-        debounce,
+    const filterUIState = {
         getRawData: () => rawData,
         getFilteredData: () => filteredData,
         setFilteredData: (next) => { filteredData = next; },
@@ -378,14 +372,29 @@
         getDrilldownState: () => drilldownState,
         setDrilldownState: (next) => { drilldownState = next; },
         setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
-        setActiveFilterToDate: (next) => { activeFilterToDate = next; },
+        setActiveFilterToDate: (next) => { activeFilterToDate = next; }
+    };
+
+    const filterUIActions = {
         resetFilteredComputationCache,
         resetComparablePeriodCache,
         updateContractHours,
         updateCurrentTab,
         updateDrilldownBanner,
-        getComparisonModeLabel,
-        formatDateStr
+        getComparisonModeLabel
+    };
+
+    const filterUI = window.DASH_FILTER_UI.createFilterUI({
+        FILTER_COLUMNS,
+        CONFIG,
+        flatpickr,
+        escapeAttr,
+        safeInlineText,
+        formatNum,
+        debounce,
+        formatDateStr,
+        state: filterUIState,
+        actions: filterUIActions
     });
 
 
@@ -407,29 +416,7 @@
         getTableState: () => tableState
     });
 
-    const dataLoader = window.DASH_DATA_LOADER.createDataLoader({
-        CONFIG,
-        DEPT_COLORS,
-        XLSX,
-        parseDate,
-        formatDateStr,
-        showToast,
-        showLoading,
-        formatNum,
-        updateComparisonModeControl,
-        resetDeptColors,
-        resetFilteredComputationCache,
-        resetComparablePeriodCache,
-        initializeFilters,
-        initializeDatePicker,
-        applyAllFilters: () => window.applyAllFilters(),
-        updateHeaderFileInfo,
-        isInternal: (...args) => analyticsCore.isInternal(...args),
-        isBillable: (...args) => analyticsCore.isBillable(...args),
-        typeCategoryOf: (...args) => analyticsCore.typeCategoryOf(...args),
-        visitTypeOf: (...args) => analyticsCore.visitTypeOf(...args),
-        productGroupOf: (...args) => analyticsCore.productGroupOf(...args),
-        calcHours: (...args) => analyticsCore.calcHours(...args),
+    const dataLoaderState = {
         getRawData: () => rawData,
         setRawData: (next) => { rawData = next; },
         getLoadedFiles: () => loadedFiles,
@@ -443,6 +430,36 @@
         setComparisonMode: (next) => { comparisonMode = next; },
         setFilteredData: (next) => { filteredData = next; },
         getDateRange: () => dateRange
+    };
+
+    const dataLoaderActions = {
+        updateComparisonModeControl,
+        resetDeptColors,
+        resetFilteredComputationCache,
+        resetComparablePeriodCache,
+        initializeFilters,
+        initializeDatePicker,
+        applyAllFilters,
+        updateHeaderFileInfo
+    };
+
+    const dataLoader = window.DASH_DATA_LOADER.createDataLoader({
+        CONFIG,
+        DEPT_COLORS,
+        XLSX,
+        parseDate,
+        formatDateStr,
+        showToast,
+        showLoading,
+        formatNum,
+        isInternal: (...args) => analyticsCore.isInternal(...args),
+        isBillable: (...args) => analyticsCore.isBillable(...args),
+        typeCategoryOf: (...args) => analyticsCore.typeCategoryOf(...args),
+        visitTypeOf: (...args) => analyticsCore.visitTypeOf(...args),
+        productGroupOf: (...args) => analyticsCore.productGroupOf(...args),
+        calcHours: (...args) => analyticsCore.calcHours(...args),
+        state: dataLoaderState,
+        actions: dataLoaderActions
     });
 
     const overviewTab = window.DASH_OVERVIEW_TAB.createOverviewTab({
@@ -708,27 +725,9 @@
 
     /** 헤더 파일 칩 & 행 수 업데이트 */
     function updateHeaderFileInfo() {
-        const chipsEl = document.getElementById('headerFileChips');
-        const rowEl = document.getElementById('headerRowCount');
-        if (loadedFiles.length === 1) {
-            chipsEl.innerHTML = `<span class="header-badge">${safeInlineText(loadedFiles[0].name)}</span>`;
-        } else {
-            chipsEl.innerHTML = loadedFiles.map(f => {
-                const shortName = f.name.replace(/주간업무보고_/, '').replace(/\.xlsx?$/, '');
-                return `<span class="file-chip">` +
-                    `<span class="chip-dot" style="background:${f.color}"></span>` +
-                    `${safeInlineText(shortName)} <span class="chip-count">${formatNum(f.count)}행</span></span>`;
-            }).join('');
-        }
-        rowEl.textContent = `총 ${formatNum(rawData.length)}행`;
-        document.getElementById('headerInfo').style.display = 'flex';
+        return appShell.updateHeaderFileInfo();
     }
 
-    /* ============================================================
-       필터 초기화 및 관리
-       ============================================================ */
-
-    /** ?? UI ?? ?? */
     function initializeFilters() {
         return filterUI.initializeFilters();
     }
@@ -753,17 +752,17 @@
     }
 
     /** ?? ?? */
-    window.filterSelectAll = function (key) {
+    function filterSelectAll(key) {
         return filterUI.filterSelectAll(key);
     };
 
     /** ?? ?? */
-    window.filterDeselectAll = function (key) {
+    function filterDeselectAll(key) {
         return filterUI.filterDeselectAll(key);
     };
 
     /** ?? ?? ??? */
-    window.clearAllFilters = function () {
+    function clearAllFilters() {
         return filterUI.clearAllFilters();
     };
 
@@ -772,7 +771,7 @@
        ============================================================ */
 
     /** ?? ??? ???? filteredData ?? */
-    window.applyAllFilters = function () {
+    function applyAllFilters() {
         return filterUI.applyAllFilters();
     };
 
@@ -845,105 +844,26 @@
     }
 
     /** 차트 클릭 시 해당 값으로 필터를 단일 선택으로 설정 */
-    window.drillDownFilter = function (key, value) {
-        if (!filterState[key]) return;
-        filterState[key].selected = new Set([value]);
-        document.querySelectorAll(`.filter-dropdown-list[data-key="${key}"] input[type="checkbox"]`).forEach(cb => {
-            cb.checked = (cb.dataset.val === value);
-        });
-        updateFilterBtnText(key);
-        drilldownState[key] = value;
-        updateDrilldownBanner();
-        applyAllFilters();
-    };
+    function drillDownFilter(key, value) {
+        return appShell.drillDownFilter(key, value);
+    }
 
-    /** 특정 드릴다운 해제 */
-    window.clearDrilldown = function (key) {
-        if (!filterState[key]) return;
-        filterState[key].selected = new Set(filterState[key].options);
-        document.querySelectorAll(`.filter-dropdown-list[data-key="${key}"] input[type="checkbox"]`).forEach(cb => {
-            cb.checked = true;
-        });
-        updateFilterBtnText(key);
-        delete drilldownState[key];
-        updateDrilldownBanner();
-        applyAllFilters();
-    };
+    function clearDrilldown(key) {
+        return appShell.clearDrilldown(key);
+    }
 
-    /** 모든 드릴다운 해제 */
-    window.clearAllDrilldowns = function () {
-        Object.keys(drilldownState).forEach(key => window.clearDrilldown(key));
-    };
+    function clearAllDrilldowns() {
+        return appShell.clearAllDrilldowns();
+    }
 
-    /** 드릴다운 뱃지 배너 업데이트 */
     function updateDrilldownBanner() {
-        let banner = document.getElementById('drilldownBanner');
-        const entries = Object.entries(drilldownState);
-        if (!entries.length) {
-            if (banner) banner.style.display = 'none';
-            return;
-        }
-        if (!banner) {
-            banner = document.createElement('div');
-            banner.id = 'drilldownBanner';
-            banner.className = 'drilldown-banner';
-            document.querySelector('.filter-bar').appendChild(banner);
-        }
-        const labelMap = {};
-        FILTER_COLUMNS.forEach(fc => { labelMap[fc.key] = fc.label; });
-        banner.style.display = 'flex';
-        banner.innerHTML =
-            `<span class="drilldown-banner-label"><i class="fas fa-mouse-pointer"></i> 차트 드릴다운:</span>` +
-            entries.map(([key, val]) =>
-                `<span class="drilldown-badge">` +
-                `<span class="drilldown-key">${safeInlineText(labelMap[key] || key)}</span> <strong>${safeInlineText(val)}</strong>` +
-                `<button onclick="clearDrilldown('${key}')" title="해제"><i class="fas fa-times"></i></button>` +
-                `</span>`
-            ).join('') +
-            (entries.length > 1
-                ? `<button class="btn-sm danger" onclick="clearAllDrilldowns()" style="padding:3px 10px;font-size:11px;"><i class="fas fa-times-circle"></i> 전체 해제</button>`
-                : '');
+        return appShell.updateDrilldownBanner();
     }
 
-    /* ============================================================
-       탭 관리
-       ============================================================ */
-    function setupTabs() {
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', function () {
-                const tab = this.dataset.tab;
-                if (tab === currentTab) return;
-
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                this.classList.add('active');
-                document.getElementById('tab-' + tab).classList.add('active');
-                currentTab = tab;
-
-                // 탭 전환 시 해당 탭 업데이트
-                updateCurrentTab();
-            });
-        });
-    }
-
-    /** 현재 탭만 업데이트 (성능 최적화) */
     function updateCurrentTab() {
-        switch (currentTab) {
-            case 'overview': updateOverviewTab(); break;
-            case 'engineer': updateEngineerTab(); break;
-            case 'product': updateProductTab(); break;
-            case 'support': updateSupportTab(); break;
-            case 'customer': updateCustomerTab(); break;
-            case 'sales': updateSalesTab(); break;
-            case 'detail': updateDetailTab(); break;
-        }
+        return appShell.updateCurrentTab();
     }
 
-    /* ============================================================
-       집계 유틸리티 (단일 pass)
-       ============================================================ */
-
-    /** 단일 pass로 여러 컬럼의 카운트 집계 */
     function aggregateCounts(data, ...keys) {
         return analyticsCore.aggregateCounts(data, ...keys);
     }
@@ -1138,177 +1058,97 @@
     }
 
     /** ??? ?? */
-    window.goPage = function (p) {
+    function goPage(p) {
         return tableUI.goPage(p);
     };
 
     /** ?? ?? */
-    window.sortTable = function (colIdx) {
+    function sortTable(colIdx) {
         return tableUI.sortTable(colIdx);
     };
 
     /** ?? ???? (?? ??? ???) */
-    window.exportToExcel = function () {
+    function exportToExcel() {
         return tableUI.exportToExcel();
     };
     /* ============================================================
        대시보드 리셋 (다른 파일 업로드)
        ============================================================ */
-    window.resetDashboard = function () {
-        // 차트 인스턴스 파괴
-        Object.values(charts).forEach(c => { try { c.destroy(); } catch (e) { } });
-        charts = {};
-        rawData = [];
-        filteredData = [];
-        compensationEntries = [];
-        activeFilterFromDate = null;
-        activeFilterToDate = null;
-        comparisonMode = 'previous_period';
-        updateComparisonModeControl();
-        loadedFiles = [];
-        drilldownState = {};
-        destroyDatePickers();
-        resetFilteredComputationCache();
-        resetComparablePeriodCache();
-        resetDeptColors(); // 부서 색상 캐시 초기화
-        const banner = document.getElementById('drilldownBanner');
-        if (banner) banner.remove();
+    function resetDashboard() {
+        return appShell.resetDashboard();
+    }
 
-        document.getElementById('dashboard').classList.remove('active');
-        document.getElementById('uploadSection').style.display = 'flex';
-        document.getElementById('headerInfo').style.display = 'none';
-        document.getElementById('fileInput').value = '';
-
-        // 탭 리셋
-        currentTab = 'overview';
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.tab-btn[data-tab="overview"]').classList.add('active');
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.getElementById('tab-overview').classList.add('active');
-    };
-
-    /* ============================================================
-       다크 모드 로직
-       ============================================================ */
     let isDarkMode = false;
 
-    function applyChartTheme() {
-        const textColor = isDarkMode ? '#9CA3AF' : '#6B7280';
-        const gridColor = isDarkMode ? '#374151' : '#E5E7EB';
-
-        Chart.defaults.color = textColor;
-        if (Chart.defaults.scale && Chart.defaults.scale.grid) {
-            Chart.defaults.scale.grid.color = gridColor;
+    appShell = window.DASH_APP_SHELL.createAppShell({
+        Chart,
+        safeInlineText,
+        escapeAttr,
+        formatNum,
+        FILTER_COLUMNS,
+        state: {
+            getCharts: () => charts,
+            setCharts: (next) => { charts = next; },
+            getRawData: () => rawData,
+            setRawData: (next) => { rawData = next; },
+            setFilteredData: (next) => { filteredData = next; },
+            setCompensationEntries: (next) => { compensationEntries = next; },
+            getLoadedFiles: () => loadedFiles,
+            setLoadedFiles: (next) => { loadedFiles = next; },
+            getDrilldownState: () => drilldownState,
+            setDrilldownState: (next) => { drilldownState = next; },
+            getFilterState: () => filterState,
+            setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
+            setActiveFilterToDate: (next) => { activeFilterToDate = next; },
+            getCurrentTab: () => currentTab,
+            setCurrentTab: (next) => { currentTab = next; },
+            getIsDarkMode: () => isDarkMode,
+            setIsDarkMode: (next) => { isDarkMode = next; },
+            getComparisonMode: () => comparisonMode,
+            setComparisonMode: (next) => { comparisonMode = next; }
+        },
+        actions: {
+            applyAllFilters,
+            clearAllFilters,
+            updateFilterSummary,
+            updateFilterBtnText,
+            destroyDatePickers,
+            resetFilteredComputationCache,
+            resetComparablePeriodCache,
+            resetDeptColors,
+            updateComparisonModeControl,
+            setupDropzone,
+            initTableControls: () => tableUI.initTableControls(),
+            normalizeComparisonMode,
+            handleFiles
+        },
+        tabRenderers: {
+            overview: updateOverviewTab,
+            engineer: updateEngineerTab,
+            product: updateProductTab,
+            support: updateSupportTab,
+            customer: updateCustomerTab,
+            sales: updateSalesTab,
+            detail: updateDetailTab
         }
+    });
 
-        Object.values(charts).forEach(chart => {
-            if (chart.options.scales) {
-                Object.values(chart.options.scales).forEach(scale => {
-                    if (scale.ticks) scale.ticks.color = textColor;
-                    if (scale.grid) scale.grid.color = gridColor;
-                    if (scale.title) scale.title.color = textColor;
-                });
-            }
-            if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
-                chart.options.plugins.legend.labels.color = textColor;
-            }
-            chart.update('none');
-        });
+    function toggleTheme() {
+        return appShell.toggleTheme();
     }
-
-    window.toggleTheme = function () {
-        isDarkMode = !isDarkMode;
-        if (isDarkMode) {
-            document.body.setAttribute('data-theme', 'dark');
-            const icon = document.getElementById('themeIcon');
-            if (icon) { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
-            localStorage.setItem('rockpaper-theme', 'dark');
-        } else {
-            document.body.removeAttribute('data-theme');
-            const icon = document.getElementById('themeIcon');
-            if (icon) { icon.classList.remove('fa-sun'); icon.classList.add('fa-moon'); }
-            localStorage.setItem('rockpaper-theme', 'light');
-        }
-        applyChartTheme();
-    };
 
     function initTheme() {
-        const saved = localStorage.getItem('rockpaper-theme');
-        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            isDarkMode = true;
-            document.body.setAttribute('data-theme', 'dark');
-            const icon = document.getElementById('themeIcon');
-            if (icon) { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
-        }
-        applyChartTheme();
+        return appShell.initTheme();
     }
 
-    /* ============================================================
-       필터 창 접기/펴기 로직
-       ============================================================ */
-    window.toggleFilterCollapsible = function () {
-        const body = document.getElementById('filterCollapsibleBody');
-        const icon = document.getElementById('filterToggleIcon');
-        if (!body || !icon) return;
+    function toggleFilterCollapsible() {
+        return appShell.toggleFilterCollapsible();
+    }
 
-        if (body.classList.contains('open')) {
-            body.classList.remove('open');
-            icon.style.transform = 'rotate(180deg)';
-        } else {
-            body.classList.add('open');
-            icon.style.transform = 'rotate(0deg)';
-        }
-    };
-
-    /* ============================================================
-       초기화
-       ============================================================ */
     function init() {
-        initTheme();
-        setupDropzone();
-        setupTabs();
-
-        // 대시보드 내 "파일 추가" 버튼 (헤더)
-        const addFileInput = document.getElementById('addFileInput');
-        if (addFileInput) {
-            addFileInput.addEventListener('change', function (e) {
-                if (e.target.files.length > 0) handleFiles(e.target.files, true);
-                this.value = '';
-            });
-        }
-
-        // 테이블 검색 이벤트
-        document.getElementById('tableSearch').addEventListener('input', debounce(function () {
-            tableState.search = this.value;
-            tableState.page = 1;
-            applyTableSearchAndRender();
-        }, 200));
-
-        // 행 수 변경
-        document.getElementById('rowsPerPage').addEventListener('change', function () {
-            tableState.perPage = parseInt(this.value);
-            tableState.page = 1;
-            renderTable();
-        });
-
-        const comparisonModeEl = document.getElementById('comparisonMode');
-        if (comparisonModeEl) {
-            updateComparisonModeControl();
-            comparisonModeEl.addEventListener('change', function () {
-                const nextMode = normalizeComparisonMode(this.value);
-                if (comparisonMode === nextMode) return;
-                comparisonMode = nextMode;
-                resetComparablePeriodCache();
-                if (rawData.length) {
-                    applyAllFilters();
-                } else {
-                    updateFilterSummary('', '');
-                }
-            });
-        }
+        return appShell.initApp();
     }
 
-    // DOM 준비 후 초기화
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

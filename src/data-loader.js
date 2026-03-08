@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     function createDataLoader(deps) {
@@ -11,34 +11,36 @@
             showToast,
             showLoading,
             formatNum,
-            updateComparisonModeControl,
-            resetDeptColors,
-            resetFilteredComputationCache,
-            resetComparablePeriodCache,
-            initializeFilters,
-            initializeDatePicker,
-            applyAllFilters,
-            updateHeaderFileInfo,
             isInternal,
             isBillable,
             typeCategoryOf,
             visitTypeOf,
             productGroupOf,
-            calcHours,
-            getRawData,
-            setRawData,
-            getLoadedFiles,
-            setLoadedFiles,
-            getColumnNames,
-            setColumnNames,
-            getCompensationEntries,
-            setCompensationEntries,
-            setActiveFilterFromDate,
-            setActiveFilterToDate,
-            setComparisonMode,
-            setFilteredData,
-            getDateRange
+            calcHours
         } = deps;
+        const state = deps.state || {};
+        const actions = deps.actions || {};
+        const updateComparisonModeControl = actions.updateComparisonModeControl || deps.updateComparisonModeControl;
+        const resetDeptColors = actions.resetDeptColors || deps.resetDeptColors;
+        const resetFilteredComputationCache = actions.resetFilteredComputationCache || deps.resetFilteredComputationCache;
+        const resetComparablePeriodCache = actions.resetComparablePeriodCache || deps.resetComparablePeriodCache;
+        const initializeFilters = actions.initializeFilters || deps.initializeFilters;
+        const initializeDatePicker = actions.initializeDatePicker || deps.initializeDatePicker;
+        const applyAllFilters = actions.applyAllFilters || deps.applyAllFilters;
+        const updateHeaderFileInfo = actions.updateHeaderFileInfo || deps.updateHeaderFileInfo;
+        const getRawData = state.getRawData || deps.getRawData;
+        const setRawData = state.setRawData || deps.setRawData;
+        const getLoadedFiles = state.getLoadedFiles || deps.getLoadedFiles;
+        const setLoadedFiles = state.setLoadedFiles || deps.setLoadedFiles;
+        const getColumnNames = state.getColumnNames || deps.getColumnNames;
+        const setColumnNames = state.setColumnNames || deps.setColumnNames;
+        const getCompensationEntries = state.getCompensationEntries || deps.getCompensationEntries;
+        const setCompensationEntries = state.setCompensationEntries || deps.setCompensationEntries;
+        const setActiveFilterFromDate = state.setActiveFilterFromDate || deps.setActiveFilterFromDate;
+        const setActiveFilterToDate = state.setActiveFilterToDate || deps.setActiveFilterToDate;
+        const setComparisonMode = state.setComparisonMode || deps.setComparisonMode;
+        const setFilteredData = state.setFilteredData || deps.setFilteredData;
+        const getDateRange = state.getDateRange || deps.getDateRange;
 
         function handleFiles(fileList, appendMode) {
             const files = Array.from(fileList).filter(file => {

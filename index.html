@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 
 <head>
@@ -57,16 +57,16 @@
             <div class="file-chip-list" id="headerFileChips"></div>
             <span class="header-badge" id="headerRowCount"></span>
 
-            <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="다크 모드 전환">
+            <button class="theme-toggle-btn" id="themeToggleBtn" title="다크 모드 전환">
                 <i class="fas fa-moon" id="themeIcon"></i>
             </button>
 
-            <button class="add-file-btn" onclick="document.getElementById('addFileInput').click()"
+            <button class="add-file-btn" id="addFileBtn"
                 title="엑셀 파일을 추가로 병합합니다">
                 <i class="fas fa-plus"></i> 파일 추가
             </button>
             <input type="file" id="addFileInput" accept=".xlsx,.xls" multiple style="display:none">
-            <button class="file-change-btn" onclick="resetDashboard()">
+            <button class="file-change-btn" id="resetDashboardBtn">
                 <i class="fas fa-undo"></i> 초기화
             </button>
         </div>
@@ -94,7 +94,7 @@
             <div class="dropzone-icon"><i class="fas fa-cloud-upload-alt"></i></div>
             <h2>엑셀 파일을 업로드하세요</h2>
             <p>락페이퍼에서 다운받은 주간업무보고 엑셀 파일(.xlsx)을 드래그앤드롭 하거나 버튼을 클릭하세요</p>
-            <button class="dropzone-btn" onclick="document.getElementById('fileInput').click()">
+            <button class="dropzone-btn" id="fileSelectBtn">
                 <i class="fas fa-folder-open"></i> 파일 선택
             </button>
             <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
@@ -112,17 +112,17 @@
 
             <!-- 필터 바 -->
             <div class="filter-bar">
-                <div class="filter-bar-header" id="filterHeader" onclick="toggleFilterCollapsible()"
+                <div class="filter-bar-header" id="filterHeader"
                     style="cursor: pointer;" title="클릭하여 필터창 접기/펴기">
                     <div class="filter-bar-title">
                         <i class="fas fa-filter"></i> 데이터 필터
                         <i class="fas fa-chevron-up" id="filterToggleIcon"
                             style="margin-left: 8px; color: var(--gray-400); transition: transform 0.3s;"></i>
                     </div>
-                    <div class="filter-actions" onclick="event.stopPropagation()">
-                        <button class="btn-sm primary" onclick="applyAllFilters()"><i class="fas fa-check"></i> 필터
+                    <div class="filter-actions" id="filterActions">
+                        <button class="btn-sm primary" id="applyFiltersBtn"><i class="fas fa-check"></i> 필터
                             적용</button>
-                        <button class="btn-sm danger" onclick="clearAllFilters()"><i class="fas fa-times"></i> 전체
+                        <button class="btn-sm danger" id="clearFiltersBtn"><i class="fas fa-times"></i> 전체
                             초기화</button>
                     </div>
                 </div>
@@ -667,7 +667,7 @@
                                 <option value="100">100행</option>
                                 <option value="200">200행</option>
                             </select>
-                            <button class="export-btn" onclick="exportToExcel()">
+                            <button class="export-btn" id="exportExcelBtn">
                                 <i class="fas fa-file-excel"></i> 엑셀 다운로드
                             </button>
                         </div>
@@ -704,6 +704,7 @@
     <script src="src/tab-sales.js"></script>
     <script src="src/tab-product.js"></script>
     <script src="src/tab-support.js"></script>
+    <script src="src/app-shell.js"></script>
     <script src="src/app.js"></script>
 </body>
 

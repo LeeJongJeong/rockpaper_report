@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     function createTableUI(deps) {
@@ -18,6 +18,7 @@
             getFilteredData,
             getTableState
         } = deps;
+        let tableControlsInitialized = false;
 
         function updateDetailTab() {
             const tableState = getTableState();
@@ -109,7 +110,7 @@
             thead.innerHTML = TABLE_COLUMNS.map((col, i) => {
                 const isSorted = tableState.sortCol === i;
                 const icon = isSorted ? (tableState.sortDir === 'asc' ? '&#9650;' : '&#9660;') : '&#8597;';
-                return `<th class="${isSorted ? 'sorted' : ''}" onclick="sortTable(${i})">${safeInlineText(col)} <span class="sort-icon">${icon}</span></th>`;
+                return `<th class="${isSorted ? 'sorted' : ''}" data-sort-col="${i}" role="button" tabindex="0">${safeInlineText(col)} <span class="sort-icon">${icon}</span></th>`;
             }).join('');
 
             const tbody = document.getElementById('dataTableBody');
@@ -144,8 +145,8 @@
             }
 
             let html = '';
-            html += `<button class="page-btn" onclick="goPage(1)" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-double-left"></i></button>`;
-            html += `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-left"></i></button>`;
+            html += `<button class="page-btn" data-page="1" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-double-left"></i></button>`;
+            html += `<button class="page-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}><i class="fas fa-angle-left"></i></button>`;
 
             let startP = Math.max(1, currentPage - 3);
             let endP = Math.min(totalPages, currentPage + 3);
@@ -156,12 +157,12 @@
 
             if (startP > 1) html += '<button class="page-btn" disabled>...</button>';
             for (let p = startP; p <= endP; p++) {
-                html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`;
+                html += `<button class="page-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
             }
             if (endP < totalPages) html += '<button class="page-btn" disabled>...</button>';
 
-            html += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-right"></i></button>`;
-            html += `<button class="page-btn" onclick="goPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-double-right"></i></button>`;
+            html += `<button class="page-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-right"></i></button>`;
+            html += `<button class="page-btn" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-angle-double-right"></i></button>`;
             el.innerHTML = html;
         }
 
@@ -202,6 +203,9 @@
         }
 
         function initTableControls() {
+            if (tableControlsInitialized) return;
+            tableControlsInitialized = true;
+
             document.getElementById('tableSearch').addEventListener('input', debounce(function () {
                 const tableState = getTableState();
                 tableState.search = this.value;
@@ -215,6 +219,33 @@
                 tableState.page = 1;
                 renderTable();
             });
+
+            document.getElementById('dataTableHead').addEventListener('click', function (e) {
+                const header = e.target.closest('[data-sort-col]');
+                if (!header) return;
+                sortTable(parseInt(header.dataset.sortCol, 10));
+            });
+
+            document.getElementById('dataTableHead').addEventListener('keydown', function (e) {
+                const header = e.target.closest('[data-sort-col]');
+                if (!header) return;
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                sortTable(parseInt(header.dataset.sortCol, 10));
+            });
+
+            document.getElementById('pagination').addEventListener('click', function (e) {
+                const button = e.target.closest('[data-page]');
+                if (!button || button.disabled) return;
+                goPage(parseInt(button.dataset.page, 10));
+            });
+
+            const exportButton = document.getElementById('exportExcelBtn');
+            if (exportButton) {
+                exportButton.addEventListener('click', function () {
+                    exportToExcel();
+                });
+            }
         }
 
         return {

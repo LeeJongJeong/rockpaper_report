@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     function createFilterUI(deps) {
@@ -10,27 +10,29 @@
             safeInlineText,
             formatNum,
             debounce,
-            getRawData,
-            getFilteredData,
-            setFilteredData,
-            getFilterState,
-            setFilterState,
-            getDateRange,
-            getDatePickers,
-            getFilterOutsideClickHandler,
-            setFilterOutsideClickHandler,
-            getDrilldownState,
-            setDrilldownState,
-            setActiveFilterFromDate,
-            setActiveFilterToDate,
-            resetFilteredComputationCache,
-            resetComparablePeriodCache,
-            updateContractHours,
-            updateCurrentTab,
-            updateDrilldownBanner,
-            getComparisonModeLabel,
             formatDateStr
         } = deps;
+        const state = deps.state || {};
+        const actions = deps.actions || {};
+        const getRawData = state.getRawData || deps.getRawData;
+        const getFilteredData = state.getFilteredData || deps.getFilteredData;
+        const setFilteredData = state.setFilteredData || deps.setFilteredData;
+        const getFilterState = state.getFilterState || deps.getFilterState;
+        const setFilterState = state.setFilterState || deps.setFilterState;
+        const getDateRange = state.getDateRange || deps.getDateRange;
+        const getDatePickers = state.getDatePickers || deps.getDatePickers;
+        const getFilterOutsideClickHandler = state.getFilterOutsideClickHandler || deps.getFilterOutsideClickHandler;
+        const setFilterOutsideClickHandler = state.setFilterOutsideClickHandler || deps.setFilterOutsideClickHandler;
+        const getDrilldownState = state.getDrilldownState || deps.getDrilldownState;
+        const setDrilldownState = state.setDrilldownState || deps.setDrilldownState;
+        const setActiveFilterFromDate = state.setActiveFilterFromDate || deps.setActiveFilterFromDate;
+        const setActiveFilterToDate = state.setActiveFilterToDate || deps.setActiveFilterToDate;
+        const resetFilteredComputationCache = actions.resetFilteredComputationCache || deps.resetFilteredComputationCache;
+        const resetComparablePeriodCache = actions.resetComparablePeriodCache || deps.resetComparablePeriodCache;
+        const updateContractHours = actions.updateContractHours || deps.updateContractHours;
+        const updateCurrentTab = actions.updateCurrentTab || deps.updateCurrentTab;
+        const updateDrilldownBanner = actions.updateDrilldownBanner || deps.updateDrilldownBanner;
+        const getComparisonModeLabel = actions.getComparisonModeLabel || deps.getComparisonModeLabel;
 
         const debouncedApply = debounce(() => applyAllFilters(), CONFIG.DEBOUNCE_MS);
 
@@ -69,8 +71,8 @@
                                 <input type="text" placeholder="검색..." data-key="${escapeAttr(fc.key)}">
                             </div>
                             <div class="filter-dropdown-actions">
-                                <button onclick="filterSelectAll('${fc.key}')">전체 선택</button>
-                                <button onclick="filterDeselectAll('${fc.key}')">전체 해제</button>
+                                <button type="button" data-filter-action="select-all" data-key="${escapeAttr(fc.key)}">전체 선택</button>
+                                <button type="button" data-filter-action="deselect-all" data-key="${escapeAttr(fc.key)}">전체 해제</button>
                             </div>
                             <div class="filter-dropdown-list" data-key="${escapeAttr(fc.key)}">
                                 ${values.map(value => `
@@ -118,6 +120,16 @@
 
             document.querySelectorAll('.filter-dropdown').forEach(dropdown => {
                 dropdown.addEventListener('click', e => e.stopPropagation());
+            });
+
+            document.querySelectorAll('.filter-dropdown-actions button').forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const key = this.dataset.key;
+                    if (this.dataset.filterAction === 'select-all') filterSelectAll(key);
+                    if (this.dataset.filterAction === 'deselect-all') filterDeselectAll(key);
+                });
             });
 
             document.querySelectorAll('.filter-dropdown-list input[type="checkbox"]').forEach(cb => {
