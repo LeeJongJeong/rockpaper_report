@@ -1,151 +1,196 @@
-# 락페이퍼 주간업무보고 대시보드 
+# 락페이퍼 주간업무보고 분석 대시보드
 
-이 프로젝트는 브라우저에서 `.xlsx`/`.xls` 파일을 읽어 주간업무보고 지표를 조회하는 **정적 대시보드**입니다.  
-별도 빌드 단계 없이 `index.html`만 열면 동작합니다.
+브라우저에서 엑셀(`.xlsx`, `.xls`) 파일을 직접 읽어 분석하는 정적 대시보드입니다.
+업로드된 데이터는 서버로 전송하지 않고 브라우저 안에서만 처리됩니다.
 
-## 0. 빠른 실행
+## 주요 기능
 
-1. 브라우저에서 `index.html` 열기 
-2. 업로드 영역에 주간업무보고 엑셀 파일 업로드
-3. 날짜/필터/탭으로 분석 화면 확인
-4. 필요 시 상세 탭에서 검색/정렬/엑셀 다운로드
+- 기간, 부서, 엔지니어, 제품, 지원유형, 고객사, 담당영업 필터
+- 개요, 엔지니어, 제품, 지원유형, 고객사, 담당영업, 상세 탭
+- 비교 기준 선택
+  - 직전 동기간
+  - 전주 동일요일
+  - 전월 동일기간
+  - 전년 동기
+- 차트 클릭 기반 드릴다운 필터
+- 상세 테이블 검색, 정렬, 페이지네이션, 엑셀 다운로드
+- 보상시트 연동 인사이트
 
-> 공통 의존성은 CDN으로 로드되며, 설치/빌드가 필요 없습니다.
+## 실행 방법
 
----
+별도 빌드 단계는 없습니다.
 
-## 1. 현재 프로젝트 구조
+### 가장 간단한 실행
 
-- `index.html`
-  - 기본 레이아웃과 탭/필터/업로드 UI
-  - CDN 스크립트 로드 (Chart.js, SheetJS, Flatpickr, Font Awesome)
-  - `src/config.js`, `src/utils.js`, `src/contract-utils.js`, `src/app.js` 로딩
-- `src/config.js`
-  - 공통 상수(`UTIL`, `WORK_HOURS_PER_DAY`, `CHART_TOP_N` 등)
-  - 필터 컬럼 정의, 색상 팔레트, 테이블 컬럼, 제품군 규칙, 휴일 규칙
-- `src/utils.js`
-  - 날짜 파싱/포맷, 숫자 포맷, 로딩/토스트 유틸
-- `src/contract-utils.js`
-  - 영업일/휴일 반영 소정근무 계산 유틸
-- `src/app.js`
-  - 파일 파싱, 집계, 탭별 차트 렌더, 자동 인사이트 생성, 필터/드릴다운/테이블 제어
-- `src/styles/main.css`
-  - 대시보드 전반 UI 스타일
-- `src/contract-utils.test.js`
-  - 소정근무 계산 회귀 테스트
-- 루트 엑셀 샘플
-  - `주간업무보고_2026_DS.xlsx`
-  - `주간업무보고_2026_IS.xlsx`
-  - `주간업무보고_2026_PS.xlsx`
+1. [index.html](/D:/myhome/rockpaper-report/index.html)을 브라우저로 엽니다.
+2. 주간업무보고 엑셀 파일을 업로드합니다.
+3. 필터와 탭을 바꿔가며 분석합니다.
 
----
+### 권장 실행
 
-## 2. 업로드/파싱 방식
+정적 파일 서버로 여는 편이 호환성에서 더 안정적입니다.
 
-- 다중 파일 업로드 지원
-  - `drag and drop` 또는 파일 선택 버튼
-  - 기존 파일 교체/추가 업로드 모드가 분리되어 있음
-- 메인 시트 파싱
-  - 기본적으로 첫 번째 시트를 사용
-  - `sheet_to_json(..., { range: 2 })`로 4행부터 데이터 사용
-- 날짜 필드
-  - `작업시작일시` 기준으로 정렬/필터링/집계
-  - 엑셀 날짜 형식(시리얼)도 처리
-- 보상 시간 시트 파싱(선택)
-  - 시트명 패턴: `근무-보상시간 통계` / `근무-보상시간` / `보상` 포함명
-  - 엔지니어별 `총 보상발생시간`을 추출해 자동인사이트 “Top 3 집중도” 계산에 사용
-
----
-
-## 3. 인터페이스(현재 동작 기준)
-
-### 필터
-- 기간: Flatpickr 기반 시작~종료일 선택
-- 다중 필터(AND):  
-  `부서명`, `엔지니어`, `제품명`, `지원유형`, `고객사명`, `담당영업`
-- 필터 요약 배지로 적용 조건 표시
-
-### 탭
-- `Overview`
-- `엔지니어`
-- `제품`
-- `지원유형`
-- `고객사`
-- `담당영업`
-- `상세(테이블)`
-
-### 주요 분석 기능
-- 전체 KPI 카드, 일별 추이, 주차별 추이, 요일 분포
-- 엔지니어/제품/지원유형/고객사/담당영업별 집계 차트
-- 드릴다운 지원(차트 클릭 시 해당 값으로 필터 단건 적용)
-- 상세 테이블의 검색/정렬/페이지네이션(50/100/200)
-- 현재 필터 결과를 엑셀로 내보내기
-
----
-
-## 4. 핵심 계산 로직
-
-### 가동률
+```powershell
+python -m http.server 8000
 ```
-가동률(%) = 가동시간 / 소정근무시간 × 100
+
+실행 후 브라우저에서 `http://localhost:8000` 을 엽니다.
+
+## 데이터 처리 방식
+
+### 기본 업로드
+
+- 여러 파일 동시 업로드 및 병합 지원
+- 첫 번째 시트를 메인 데이터로 사용
+- 메인 데이터는 `sheet_to_json(..., { range: 2 })` 기준으로 읽음
+- 보상시트가 있으면 추가 집계에 사용
+
+### 보상시트
+
+다음 이름 패턴의 시트를 탐색합니다.
+
+- `근무-보상시간 통계`
+- `근무-보상시간`
+- `보상` 관련 시트명
+
+여기서 엔지니어별 보상발생시간을 읽어 인사이트에 반영합니다.
+
+## 분석 기준
+
+### 엔지니어 가동률
+
+현재 엔지니어 가동률은 아래 기준으로 계산합니다.
+
+```text
+가동률(%) = billableHours / 소정근무시간 × 100
 ```
-- 가동시간: `isBillable()`로 분류된 항목의 작업시간 합
-- 소정근무시간: 필터 기간 영업일 × `WORK_HOURS_PER_DAY`(기본 8)
-- `isBillable()` 항목: 기술지원/점검지원/Presales/비상대기/현장실습/고객사교육지원
 
-### 작업시간(calcHours)
-- 기본: `작업종료일시 - 작업시작일시`
-- 점심시간 차감 예외
-  - 09:00~18:00 또는 08:30~17:30인 경우 1시간 차감
+- `billableHours`: 현재 필터 기간 내 billable 지원시간 합계
+- `소정근무시간`: 현재 기간의 영업일 수 × 8시간
 
-### 주차 집계
-- 주차 라벨은 **월요일 기준**으로 계산
+### billable 포함 규칙
 
-### 소정근무시간(휴일 포함)
-- `contract-utils.js`에서 주말·공휴일을 제외해 영업일 계산
-- 휴일 규칙은 `src/config.js`의 `CONFIG.HOLIDAYS`와 대체공휴일 옵션에 따름
-- 월별 소정근무 요약(`summarizeContractHoursByRange`)도 제공
+현재 billable 포함 기준은 다음과 같습니다.
 
----
+- `기술지원`
+- `점검지원`
+- `Presales`, `presales`
+- `비상대기`
+- `현장실습`
+- `고객사교육`
 
-## 5. 자동 인사이트(현재)
+따라서 `내부업무`, `셀프스터디` 같은 항목은 가동시간에 포함되지 않습니다.
 
-`generateInsights()`에서 `MAX_INSIGHTS = 15`로 상한 설정 후 조건부 카드 생성.  
-현재 반영되는 주요 항목:
-- 총 보상발생시간 Top 3 집중도
-- 전체 가동률 상태(달성/주의/경보)
-- 개인 가동률 경보(팀 평균 대비 이격 포함)
-- 고객사 단일 엔지니어 의존 리스크
-- 단일 엔지니어 제품 커버리지 리스크
-- 과부하/업무 집중/내부업무 과다/고객사 쏠림 등
-- 주간 트렌드 변동(연속 하락, 급증)
-- 담당영업 미배정, Presales 비중 등
+관련 로직:
+- [src/analytics-core.js](/D:/myhome/rockpaper-report/src/analytics-core.js)
+- [src/data-loader.js](/D:/myhome/rockpaper-report/src/data-loader.js)
 
----
+### 작업시간 계산
 
-## 6. 회귀 테스트
+기본 작업시간은 `작업종료일시 - 작업시작일시` 입니다.
+다음 패턴은 점심 1시간을 차감합니다.
 
-### 계약 근무일/시간 계산 테스트
-```bash
+- `09:00 ~ 18:00`
+- `08:30 ~ 17:30`
+
+### 비교 기준
+
+대시보드 KPI와 비교형 서브텍스트는 현재 선택한 비교 기준으로 계산됩니다.
+
+- `직전 동기간`: 현재와 길이가 같은 바로 이전 기간
+- `전주 동일요일`: 7일 앞당긴 동일 요일 구간
+- `전월 동일기간`: 한 달 앞당긴 동일 달력 구간
+- `전년 동기`: 1년 앞당긴 동일 달력 구간
+
+## 현재 소스 구조
+
+### 진입점
+
+- [index.html](/D:/myhome/rockpaper-report/index.html)
+- [src/app.js](/D:/myhome/rockpaper-report/src/app.js)
+
+### 공통 설정 및 유틸
+
+- [src/config.js](/D:/myhome/rockpaper-report/src/config.js): 상수, 필터 컬럼, 색상, 제품군 규칙, 공휴일 설정
+- [src/utils.js](/D:/myhome/rockpaper-report/src/utils.js): 날짜/숫자 포맷, debounce, toast, loading
+- [src/contract-utils.js](/D:/myhome/rockpaper-report/src/contract-utils.js): 영업일/소정근무시간 계산
+- [src/dashboard-ui.js](/D:/myhome/rockpaper-report/src/dashboard-ui.js): 차트/히트맵/랭킹 공통 UI 헬퍼
+
+### 데이터/분석 계층
+
+- [src/data-loader.js](/D:/myhome/rockpaper-report/src/data-loader.js): 파일 업로드, 엑셀 파싱, row 정규화, 보상시트 처리
+- [src/analytics-core.js](/D:/myhome/rockpaper-report/src/analytics-core.js): 비교 기간, KPI summary, 집계, 분류 규칙
+
+### UI 계층
+
+- [src/filter-ui.js](/D:/myhome/rockpaper-report/src/filter-ui.js): 필터 생성, 드롭다운, 날짜 선택, 필터 요약
+- [src/table-ui.js](/D:/myhome/rockpaper-report/src/table-ui.js): 상세 테이블, 정렬, 검색, 페이지네이션, 엑셀 export
+- [src/app-shell.js](/D:/myhome/rockpaper-report/src/app-shell.js): 탭 전환, 드릴다운 배너, 테마, 리셋, 정적 이벤트 바인딩
+
+### 탭 렌더러
+
+- [src/tab-overview.js](/D:/myhome/rockpaper-report/src/tab-overview.js)
+- [src/tab-engineer.js](/D:/myhome/rockpaper-report/src/tab-engineer.js)
+- [src/tab-product.js](/D:/myhome/rockpaper-report/src/tab-product.js)
+- [src/tab-support.js](/D:/myhome/rockpaper-report/src/tab-support.js)
+- [src/tab-customer.js](/D:/myhome/rockpaper-report/src/tab-customer.js)
+- [src/tab-sales.js](/D:/myhome/rockpaper-report/src/tab-sales.js)
+
+## 개발 가이드
+
+### 모듈 책임 원칙
+
+- `app.js` 는 상태 보관과 모듈 wiring 중심으로 유지
+- 계산 로직은 `analytics-core.js`
+- 업로드/정규화는 `data-loader.js`
+- DOM 이벤트와 화면 제어는 `filter-ui.js`, `table-ui.js`, `app-shell.js`
+- 탭별 렌더링은 각 `tab-*.js`
+
+### 인코딩 정책
+
+저장소는 UTF-8을 기본 정책으로 사용합니다.
+
+- [/.editorconfig](/D:/myhome/rockpaper-report/.editorconfig)
+- [/.gitattributes](/D:/myhome/rockpaper-report/.gitattributes)
+
+텍스트 파일은 UTF-8로 유지하고, BOM 없는 UTF-8을 권장합니다.
+
+인코딩 검사는 아래 스크립트로 수행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check-utf8.ps1
+```
+
+## 테스트 및 검증
+
+### 회귀 테스트
+
+```powershell
 node src/contract-utils.test.js
 ```
-- 2026-01-01 ~ 2026-02-28:
-  - 영업일: 38일
-  - 소정근무: 304시간(8시간 기준)
-- 월별 분해 및 정규화 일치성 검증 포함
 
----
+### 문법 검사
 
-## 7. 운영 시 주의사항
-- 엑셀 컬럼명이 기존 명칭(`작업시작일시`, `작업종료일시`, `엔지니어` 등)과 다르면 일부 집계가 누락될 수 있음
-- 공휴일/휴일대체 규칙은 `src/config.js` 수정 후 테스트를 먼저 실행하고 배포
-- 대용량 업로드 후 브라우저 처리 시간이 다소 발생할 수 있음(로딩 오버레이 표시)
+```powershell
+node --check src/app.js
+node --check src/app-shell.js
+node --check src/analytics-core.js
+node --check src/data-loader.js
+node --check src/filter-ui.js
+node --check src/table-ui.js
+```
 
----
+## 샘플 파일
 
-## 8. 라이선스/보안
-- 업로드 데이터는 브라우저 내에서 처리
-- 서버 전송 없이 로컬 분석 중심 구조
+루트에 아래 샘플 파일이 포함되어 있습니다.
 
----
+- `주간업무보고_2026_DS.xlsx`
+- `주간업무보고_2026_IS.xlsx`
+- `주간업무보고_2026_PS.xlsx`
 
+## 운영 시 주의사항
+
+- 원본 엑셀 컬럼명이 현재 로직의 기대값과 다르면 일부 집계가 누락될 수 있습니다.
+- 지원유형 분류는 현재 정규식 기반입니다. 데이터 입력 표현이 달라지면 billable/internal 분류 결과가 달라질 수 있습니다.
+- 브라우저에서 대용량 파일을 바로 처리하므로 파일 크기가 크면 첫 렌더링에 시간이 걸릴 수 있습니다.
+- 비교 KPI 해석 전에는 현재 선택한 비교 기준을 먼저 확인하는 것이 좋습니다.
