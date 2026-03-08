@@ -41,8 +41,11 @@
         const setComparisonMode = state.setComparisonMode || deps.setComparisonMode;
         const setFilteredData = state.setFilteredData || deps.setFilteredData;
         const getDateRange = state.getDateRange || deps.getDateRange;
+        let activeLoadSessionId = 0;
 
         function handleFiles(fileList, appendMode) {
+            activeLoadSessionId += 1;
+            const sessionId = activeLoadSessionId;
             const files = Array.from(fileList).filter(file => {
                 const ext = file.name.split('.').pop().toLowerCase();
                 if (!['xlsx', 'xls'].includes(ext)) {
@@ -71,37 +74,39 @@
                 resetFilteredComputationCache();
                 resetComparablePeriodCache();
             }
-            processFilesSequentially(files, 0);
+            processFilesSequentially(files, 0, sessionId);
         }
 
-        function processFilesSequentially(files, idx) {
+        function processFilesSequentially(files, idx, sessionId) {
+            if (sessionId !== activeLoadSessionId) return;
             if (idx >= files.length) {
-                finalizeDataLoad();
+                finalizeDataLoad(sessionId);
                 return;
             }
             const file = files[idx];
             showLoading(
                 true,
-                `파일 읽는 중 (${idx + 1}/${files.length})`,
-                `${file.name} · ${(file.size / 1024).toFixed(1)} KB`
+                `\uD30C\uC77C \uC77D\uB294 \uC911 (${idx + 1}/${files.length})`,
+                `${file.name} \u00B7 ${(file.size / 1024).toFixed(1)} KB`
             );
             const reader = new FileReader();
             reader.onload = function (event) {
-                showLoading(true, `${file.name} 파싱 중...`, '대용량 파일은 수 초 소요될 수 있습니다');
-                setTimeout(() => {
-                    try {
-                        appendExcelData(event.target.result, file.name);
-                        processFilesSequentially(files, idx + 1);
-                    } catch (err) {
-                        showLoading(false);
-                        showToast(`${file.name} 파싱 오류: ${err.message}`, 'error');
-                        console.error(err);
-                    }
-                }, 50);
+                if (sessionId !== activeLoadSessionId) return;
+                showLoading(true, `${file.name} \uD30C\uC2F1 \uC911...`, '\uB300\uC6A9\uB7C9 \uD30C\uC77C\uC740 \uC218 \uCD08 \uC18C\uC694\uB420 \uC218 \uC788\uC2B5\uB2C8\uB2E4');
+                try {
+                    appendExcelData(event.target.result, file.name);
+                    processFilesSequentially(files, idx + 1, sessionId);
+                } catch (err) {
+                    if (sessionId !== activeLoadSessionId) return;
+                    showLoading(false);
+                    showToast(`${file.name} \uD30C\uC2F1 \uC624\uB958: ${err.message}`, 'error');
+                    console.error(err);
+                }
             };
             reader.onerror = () => {
+                if (sessionId !== activeLoadSessionId) return;
                 showLoading(false);
-                showToast(`${file.name}을 읽을 수 없습니다.`, 'error');
+                showToast(`${file.name}\uC744 \uC77D\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.`, 'error');
             };
             reader.readAsArrayBuffer(file);
         }
@@ -248,11 +253,12 @@
             appendCompensationSheet(wb, fileName);
         }
 
-        function finalizeDataLoad() {
+        function finalizeDataLoad(sessionId) {
+            if (sessionId !== activeLoadSessionId) return;
             const rawData = getRawData();
             if (!rawData.length) {
                 showLoading(false);
-                showToast('로드된 데이터가 없습니다.', 'error');
+                showToast('\uB85C\uB4DC\uB41C \uB370\uC774\uD130\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.', 'error');
                 return;
             }
 
@@ -273,20 +279,19 @@
             document.getElementById('uploadSection').style.display = 'none';
             document.getElementById('dashboard').classList.add('active');
 
-            showLoading(true, '필터를 초기화하는 중...');
+            showLoading(true, '\uD544\uD130\uB97C \uCD08\uAE30\uD654\uD558\uB294 \uC911...');
             initializeFilters();
             initializeDatePicker();
 
-            showLoading(true, '차트를 그리는 중...');
-            setTimeout(() => {
-                applyAllFilters();
-                showLoading(false);
-                const loadedFiles = getLoadedFiles();
-                const msg = loadedFiles.length > 1
-                    ? `${loadedFiles.length}개 파일 병합 완료 · 총 ${formatNum(rawData.length)}건`
-                    : `${formatNum(rawData.length)}건의 데이터가 로드되었습니다.`;
-                showToast(msg, 'success');
-            }, 100);
+            showLoading(true, '\uCC28\uD2B8\uB97C \uADF8\uB9AC\uB294 \uC911...');
+            applyAllFilters();
+            if (sessionId !== activeLoadSessionId) return;
+            showLoading(false);
+            const loadedFiles = getLoadedFiles();
+            const msg = loadedFiles.length > 1
+                ? `${loadedFiles.length}\uAC1C \uD30C\uC77C \uBCD1\uD569 \uC644\uB8CC \u00B7 \uCD1D ${formatNum(rawData.length)}\uAC74`
+                : `${formatNum(rawData.length)}\uAC74\uC758 \uB370\uC774\uD130\uAC00 \uB85C\uB4DC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`;
+            showToast(msg, 'success');
         }
 
         return {

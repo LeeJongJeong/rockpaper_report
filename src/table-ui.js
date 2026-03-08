@@ -5,6 +5,7 @@
         const {
             TABLE_COLUMNS,
             TABLE_COLUMN_TYPES,
+            DEFAULT_PER_PAGE,
             XLSX,
             debounce,
             formatNum,
@@ -25,6 +26,24 @@
             tableState.page = 1;
             tableState.search = document.getElementById('tableSearch').value;
             applyTableSearchAndRender();
+        }
+
+        function resetDetailTableState() {
+            const tableState = getTableState();
+            const defaultPerPage = Number(DEFAULT_PER_PAGE) || 50;
+
+            tableState.page = 1;
+            tableState.perPage = defaultPerPage;
+            tableState.sortCol = null;
+            tableState.sortDir = 'asc';
+            tableState.search = '';
+            tableState.searchData = [];
+
+            const searchInput = document.getElementById('tableSearch');
+            if (searchInput) searchInput.value = '';
+
+            const rowsSelect = document.getElementById('rowsPerPage');
+            if (rowsSelect) rowsSelect.value = String(defaultPerPage);
         }
 
         function getTableSortValue(row, col) {
@@ -250,6 +269,7 @@
 
         return {
             updateDetailTab,
+            resetDetailTableState,
             getTableSortValue,
             compareTableRows,
             applyTableSearchAndRender,

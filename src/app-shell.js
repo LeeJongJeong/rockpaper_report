@@ -45,6 +45,7 @@
         const updateComparisonModeControl = actions.updateComparisonModeControl || deps.updateComparisonModeControl;
         const setupDropzone = actions.setupDropzone || deps.setupDropzone;
         const initTableControls = actions.initTableControls || deps.initTableControls;
+        const resetDetailTableState = actions.resetDetailTableState || deps.resetDetailTableState;
         const normalizeComparisonMode = actions.normalizeComparisonMode || deps.normalizeComparisonMode;
         const handleFiles = actions.handleFiles || deps.handleFiles;
 
@@ -82,7 +83,7 @@
             applyAllFilters();
         }
 
-        function clearDrilldown(key) {
+        function clearDrilldownState(key) {
             const filterState = getFilterState();
             if (!filterState[key]) return;
             filterState[key].selected = new Set(filterState[key].options);
@@ -93,12 +94,20 @@
             const nextDrilldownState = Object.assign({}, getDrilldownState());
             delete nextDrilldownState[key];
             setDrilldownState(nextDrilldownState);
+        }
+
+        function clearDrilldown(key) {
+            clearDrilldownState(key);
             updateDrilldownBanner();
             applyAllFilters();
         }
 
         function clearAllDrilldowns() {
-            Object.keys(getDrilldownState()).forEach(key => clearDrilldown(key));
+            const activeKeys = Object.keys(getDrilldownState());
+            if (!activeKeys.length) return;
+            activeKeys.forEach(key => clearDrilldownState(key));
+            updateDrilldownBanner();
+            applyAllFilters();
         }
 
         function updateDrilldownBanner() {
@@ -260,6 +269,7 @@
             document.getElementById('uploadSection').style.display = 'flex';
             document.getElementById('headerInfo').style.display = 'none';
             document.getElementById('fileInput').value = '';
+            if (resetDetailTableState) resetDetailTableState();
 
             setCurrentTab('overview');
             document.querySelectorAll('.tab-btn').forEach(node => node.classList.remove('active'));

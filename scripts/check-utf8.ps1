@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-$patterns = @('*.js', '*.html', '*.css', '*.md', '*.json')
+$patterns = @('*.js', '*.html', '*.css', '*.md', '*.json', '*.ps1')
 $utf8 = New-Object System.Text.UTF8Encoding($false, $true)
 $issues = @()
 

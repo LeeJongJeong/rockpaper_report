@@ -155,10 +155,17 @@ python -m http.server 8000
 
 텍스트 파일은 UTF-8로 유지하고, BOM 없는 UTF-8을 권장합니다.
 
-인코딩 검사는 아래 스크립트로 수행합니다.
+텍스트 무결성 검사는 아래 스크립트로 수행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check-text-integrity.ps1
+```
+
+개별 실행이 필요하면 아래 스크립트를 사용합니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-utf8.ps1
+powershell -ExecutionPolicy Bypass -File scripts/check-text-corruption.ps1
 ```
 
 ## 테스트 및 검증

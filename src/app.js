@@ -1,93 +1,36 @@
 (function () {
     'use strict';
 
-    /* ============================================================
-       전역 상태
-       ============================================================ */
-    let rawData = [];              // 원본 데이터 배열
-    let filteredData = [];         // 필터 적용된 데이터
-    let columnNames = [];          // 컬럼명 배열
-    let filterState = {};          // 각 필터의 선택 상태
-    let dateRange = { min: null, max: null };  // 날짜 범위
-    let activeFilterFromDate = null; // 현재 적용된 날짜 필터 시작
-    let activeFilterToDate = null;   // 현재 적용된 날짜 필터 종료
-    let charts = {};               // Chart.js 인스턴스 캐시
-    let currentTab = 'overview';   // 현재 활성 탭
-    let loadedFiles = [];          // 병합된 파일 목록 [{ name, count, color }]
-    let drilldownState = {};       // 차트 드릴다운 필터 상태 { 컬럼키: 값 }
-    let contractWorkDays = 0;      // 현재 필터 기준 영업일(주말·공휴일 제외)
-    let contractWorkHours = 0;     // 현재 필터 기준 소정근무(=영업일×8h)
-    let compensationEntries = [];   // 근무-보상시간 통계 엔지니어별 보상시간 집계
-    let datePickers = { from: null, to: null };
-    let filterOutsideClickHandler = null;
-    let filteredComputationCache = { dataRef: null, store: {} };
-    let comparablePeriodCache = { key: null, value: null };
-    let comparisonMode = 'previous_period';
-    let tableState = {             // 테이블 상태
-        page: 1,
-        perPage: 50, // CONFIG.TABLE_DEFAULT_PER_PAGE
-        sortCol: null,
-        sortDir: 'asc',
-        search: '',
-        searchData: []
-    };
-
-    // 공통 설정/유틸 초기화 (별도 파일 분리)
-    const APP_CONFIG = window.DASH_CONFIG || {};
+    const APP_CONFIG = window.DASH_CONFIG;
     const APP_UTILS = window.DASH_UTILS || {};
 
-    const CONFIG = APP_CONFIG.CONFIG || {
-        UTIL: { DANGER: 60, TARGET: 80 },
-        WORK_HOURS_PER_DAY: 8,
-        HOLIDAYS: [],
-        MOVING_AVG_DAYS: 7,
-        FILE_MAX_MB: 200,
-        TABLE_DEFAULT_PER_PAGE: 50,
-        CHART_TOP_N: { PIE: 8, BAR: 10, RADAR: 5, TREND: 6 },
-        DEBOUNCE_MS: 150
-    };
+    if (!APP_CONFIG) {
+        throw new Error('DASH_CONFIG is required. Load src/config.js before src/app.js.');
+    }
 
-    const FILTER_COLUMNS = APP_CONFIG.FILTER_COLUMNS || [
-        { key: '부서명', label: '부서' },
-        { key: '엔지니어', label: '엔지니어' },
-        { key: '제품명', label: '제품' },
-        { key: '지원유형', label: '지원유형' },
-        { key: '고객사명', label: '고객사' },
-        { key: '담당영업', label: '담당영업' }
-    ];
+    function getConfigValue(key) {
+        if (!Object.prototype.hasOwnProperty.call(APP_CONFIG, key) || APP_CONFIG[key] == null) {
+            throw new Error(`DASH_CONFIG.${key} is required.`);
+        }
+        return APP_CONFIG[key];
+    }
 
-    const COMPARISON_MODES = {
-        previous_period: { label: '직전 동기간', description: '현재 선택한 기간과 길이가 같은 바로 이전 구간과 비교합니다.' },
-        previous_week: { label: '전주 동일요일', description: '현재 기간을 7일 앞당긴 동일 요일 구간과 비교합니다.' },
-        previous_month: { label: '전월 동일기간', description: '현재 기간을 한 달 앞당긴 동일 달력 구간과 비교합니다.' },
-        previous_year: { label: '전년 동기', description: '현재 기간을 1년 앞당긴 동일 달력 구간과 비교합니다.' }
-    };
+    const CONFIG = getConfigValue('CONFIG');
 
-    const COLORS = APP_CONFIG.COLORS || [
-        '#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444',
-        '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#06B6D4',
-        '#6366F1', '#84CC16', '#D946EF', '#0D9488', '#E11D48',
-        '#7C3AED', '#059669', '#DC2626', '#2563EB', '#CA8A04',
-        '#9333EA', '#16A34A', '#DB2777', '#0284C7', '#EA580C'
-    ];
+    const appState = window.DASH_APP_STATE.createAppState({
+        tableDefaultPerPage: CONFIG.TABLE_DEFAULT_PER_PAGE
+    });
+    const state = appState.getState();
 
-    const DEPT_COLORS = APP_CONFIG.DEPT_COLORS || [
-        '#2563EB', '#7C3AED', '#059669', '#DC2626', '#D97706',
-        '#0891B2', '#BE185D', '#4338CA', '#0D9488', '#B45309',
-        '#7E22CE', '#15803D', '#9333EA', '#0284C7', '#EA580C'
-    ];
-    const DEPT_BG_COLORS = APP_CONFIG.DEPT_BG_COLORS || [
-        '#DBEAFE', '#F3E8FF', '#DCFCE7', '#FEE2E2', '#FEF3C7',
-        '#CFFAFE', '#FCE7F3', '#E0E7FF', '#CCFBF1', '#FEF3C7',
-        '#F3E8FF', '#DCFCE7', '#FAE8FF', '#E0F2FE', '#FFF7ED'
-    ];
-    const TABLE_COLUMNS = APP_CONFIG.TABLE_COLUMNS || ['작업시작일시', '작업종료일시', '작업시간(h)', '부서명', '엔지니어', '제품명', '지원유형', '고객사명', '지원내역', '지원도시', '담당영업'];
-    const TABLE_COLUMN_TYPES = Object.assign({
-        '작업시작일시': 'date',
-        '작업종료일시': 'date',
-        '작업시간(h)': 'number'
-    }, APP_CONFIG.TABLE_COLUMN_TYPES || {});
-    const PRODUCT_GROUP_RULES = APP_CONFIG.PRODUCT_GROUP_RULES || [];
+    const FILTER_COLUMNS = getConfigValue('FILTER_COLUMNS');
+    const COMPARISON_MODES = getConfigValue('COMPARISON_MODES');
+    const COLORS = getConfigValue('COLORS');
+    const DEPT_COLORS = getConfigValue('DEPT_COLORS');
+    const DEPT_BG_COLORS = getConfigValue('DEPT_BG_COLORS');
+    const TABLE_COLUMNS = getConfigValue('TABLE_COLUMNS');
+    const TABLE_COLUMN_TYPES = getConfigValue('TABLE_COLUMN_TYPES');
+    const PRODUCT_GROUP_RULES = getConfigValue('PRODUCT_GROUP_RULES');
+
     const {
         parseDate,
         formatDateStr,
@@ -285,8 +228,8 @@
         DEPT_COLORS,
         DEPT_BG_COLORS,
         formatNum,
-        getCharts: () => charts,
-        setChart: (id, chart) => { charts[id] = chart; }
+        getCharts: () => state.charts,
+        setChart: (id, chart) => { state.charts[id] = chart; }
     });
 
     function getDeptColor(deptName) {
@@ -306,33 +249,33 @@
     }
 
     function resetFilteredComputationCache() {
-        filteredComputationCache = { dataRef: filteredData, store: {} };
+        state.filteredComputationCache = { dataRef: state.filteredData, store: {} };
     }
     function resetComparablePeriodCache() {
-        comparablePeriodCache = { key: null, value: null };
+        state.comparablePeriodCache = { key: null, value: null };
     }
     function normalizeComparisonMode(mode) {
         return Object.prototype.hasOwnProperty.call(COMPARISON_MODES, mode) ? mode : 'previous_period';
     }
     function getComparisonModeMeta(mode) {
-        return COMPARISON_MODES[normalizeComparisonMode(mode || comparisonMode)] || COMPARISON_MODES.previous_period;
+        return COMPARISON_MODES[normalizeComparisonMode(mode || state.comparisonMode)] || COMPARISON_MODES.previous_period;
     }
     function getComparisonModeLabel(mode) {
         return getComparisonModeMeta(mode).label;
     }
     function updateComparisonModeControl() {
         const select = document.getElementById('comparisonMode');
-        if (select) select.value = normalizeComparisonMode(comparisonMode);
+        if (select) select.value = normalizeComparisonMode(state.comparisonMode);
     }
     function getCachedFilteredValue(key, producer, data) {
-        if (data !== filteredData) return producer();
-        if (filteredComputationCache.dataRef !== filteredData) {
+        if (data !== state.filteredData) return producer();
+        if (state.filteredComputationCache.dataRef !== state.filteredData) {
             resetFilteredComputationCache();
         }
-        if (!Object.prototype.hasOwnProperty.call(filteredComputationCache.store, key)) {
-            filteredComputationCache.store[key] = producer();
+        if (!Object.prototype.hasOwnProperty.call(state.filteredComputationCache.store, key)) {
+            state.filteredComputationCache.store[key] = producer();
         }
-        return filteredComputationCache.store[key];
+        return state.filteredComputationCache.store[key];
     }
 
     const analyticsCore = window.DASH_ANALYTICS_CORE.createAnalyticsCore({
@@ -344,36 +287,20 @@
         getCachedFilteredValue,
         getContractWorkHours,
         getContractWorkHoursForRange,
-        getRawData: () => rawData,
-        getFilterState: () => filterState,
-        getDateRange: () => dateRange,
-        getActiveFilterFromDate: () => activeFilterFromDate,
-        getActiveFilterToDate: () => activeFilterToDate,
-        getCompensationEntries: () => compensationEntries,
-        getComparisonMode: () => comparisonMode,
-        getComparablePeriodCache: () => comparablePeriodCache,
-        setComparablePeriodCache: (nextCache) => { comparablePeriodCache = nextCache; },
+        getRawData: () => state.rawData,
+        getFilterState: () => state.filterState,
+        getDateRange: () => state.dateRange,
+        getActiveFilterFromDate: () => state.activeFilterFromDate,
+        getActiveFilterToDate: () => state.activeFilterToDate,
+        getCompensationEntries: () => state.compensationEntries,
+        getComparisonMode: () => state.comparisonMode,
+        getComparablePeriodCache: () => state.comparablePeriodCache,
+        setComparablePeriodCache: (nextCache) => { state.comparablePeriodCache = nextCache; },
         normalizeComparisonMode,
         getComparisonModeLabel,
         safeInlineText
     });
 
-
-    const filterUIState = {
-        getRawData: () => rawData,
-        getFilteredData: () => filteredData,
-        setFilteredData: (next) => { filteredData = next; },
-        getFilterState: () => filterState,
-        setFilterState: (next) => { filterState = next; },
-        getDateRange: () => dateRange,
-        getDatePickers: () => datePickers,
-        getFilterOutsideClickHandler: () => filterOutsideClickHandler,
-        setFilterOutsideClickHandler: (next) => { filterOutsideClickHandler = next; },
-        getDrilldownState: () => drilldownState,
-        setDrilldownState: (next) => { drilldownState = next; },
-        setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
-        setActiveFilterToDate: (next) => { activeFilterToDate = next; }
-    };
 
     const filterUIActions = {
         resetFilteredComputationCache,
@@ -393,7 +320,7 @@
         formatNum,
         debounce,
         formatDateStr,
-        state: filterUIState,
+        state: appState,
         actions: filterUIActions
     });
 
@@ -402,6 +329,7 @@
     const tableUI = window.DASH_TABLE_UI.createTableUI({
         TABLE_COLUMNS,
         TABLE_COLUMN_TYPES,
+        DEFAULT_PER_PAGE: CONFIG.TABLE_DEFAULT_PER_PAGE,
         XLSX,
         debounce,
         formatNum,
@@ -412,25 +340,9 @@
         parseMetricValue,
         parseDate,
         showToast,
-        getFilteredData: () => filteredData,
-        getTableState: () => tableState
+        getFilteredData: () => state.filteredData,
+        getTableState: () => state.tableState
     });
-
-    const dataLoaderState = {
-        getRawData: () => rawData,
-        setRawData: (next) => { rawData = next; },
-        getLoadedFiles: () => loadedFiles,
-        setLoadedFiles: (next) => { loadedFiles = next; },
-        getColumnNames: () => columnNames,
-        setColumnNames: (next) => { columnNames = next; },
-        getCompensationEntries: () => compensationEntries,
-        setCompensationEntries: (next) => { compensationEntries = next; },
-        setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
-        setActiveFilterToDate: (next) => { activeFilterToDate = next; },
-        setComparisonMode: (next) => { comparisonMode = next; },
-        setFilteredData: (next) => { filteredData = next; },
-        getDateRange: () => dateRange
-    };
 
     const dataLoaderActions = {
         updateComparisonModeControl,
@@ -458,7 +370,7 @@
         visitTypeOf: (...args) => analyticsCore.visitTypeOf(...args),
         productGroupOf: (...args) => analyticsCore.productGroupOf(...args),
         calcHours: (...args) => analyticsCore.calcHours(...args),
-        state: dataLoaderState,
+        state: appState,
         actions: dataLoaderActions
     });
 
@@ -468,7 +380,7 @@
         formatNum,
         utilColor,
         safeInlineText,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         getComparablePeriodContext,
         aggregateEngineers,
         buildAnalyticsSummary,
@@ -489,8 +401,8 @@
         getDeptColor,
         aggregateByTeam,
         getCompensationTopEngineers,
-        getActiveFilterFromDate: () => activeFilterFromDate,
-        getActiveFilterToDate: () => activeFilterToDate,
+        getActiveFilterFromDate: () => state.activeFilterFromDate,
+        getActiveFilterToDate: () => state.activeFilterToDate,
         isBillable,
         isInternal,
         getWeekKey,
@@ -502,7 +414,7 @@
         COLORS,
         utilColor,
         safeInlineText,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         getComparablePeriodContext,
         aggregateEngineers,
         buildAnalyticsSummary,
@@ -510,7 +422,7 @@
         buildDeltaHtml,
         upsertChart,
         makeDrilldownClick,
-        getContractWorkDays: () => contractWorkDays,
+        getContractWorkDays: () => state.contractWorkDays,
         getDeptColor,
         buildDeptLegendHTML,
         getAllDeptNames,
@@ -527,7 +439,7 @@
         COLORS,
         safeInlineText,
         escapeAttr,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         getComparablePeriodContext,
         aggregateCustomers,
         buildAnalyticsSummary,
@@ -547,7 +459,7 @@
         CONFIG,
         COLORS,
         safeInlineText,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         aggregateSales,
         upsertChart,
         typeCategoryOf,
@@ -561,7 +473,7 @@
     const productTab = window.DASH_PRODUCT_TAB.createProductTab({
         COLORS,
         safeInlineText,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         aggregateProducts,
         upsertChart,
         productGroupOf,
@@ -579,7 +491,7 @@
 
     const supportTab = window.DASH_SUPPORT_TAB.createSupportTab({
         safeInlineText,
-        getFilteredData: () => filteredData,
+        getFilteredData: () => state.filteredData,
         visitTypeOf,
         typeCategoryOf,
         upsertChart,
@@ -611,16 +523,16 @@
         let end = toDate || null;
 
         if (!start || !end) {
-            for (let i = 0; i < filteredData.length; i++) {
-                const d = filteredData[i]._date;
+            for (let i = 0; i < state.filteredData.length; i++) {
+                const d = state.filteredData[i]._date;
                 if (!d) continue;
                 if (!start || d < start) start = d;
                 if (!end || d > end) end = d;
             }
         }
 
-        if (!start) start = dateRange.min;
-        if (!end) end = dateRange.max;
+        if (!start) start = state.dateRange.min;
+        if (!end) end = state.dateRange.max;
 
         return { start, end };
     }
@@ -630,12 +542,12 @@
         const summary = CONTRACT_UTILS.summarizeContractHoursByRange(range.start, range.end, HOLIDAY_DATA, {
             workHoursPerDay: CONFIG.WORK_HOURS_PER_DAY
         });
-        contractWorkDays = summary.totalWorkDays || 0;
-        contractWorkHours = summary.totalWorkHours != null ? summary.totalWorkHours : (contractWorkDays * CONFIG.WORK_HOURS_PER_DAY);
+        state.contractWorkDays = summary.totalWorkDays || 0;
+        state.contractWorkHours = summary.totalWorkHours != null ? summary.totalWorkHours : (state.contractWorkDays * CONFIG.WORK_HOURS_PER_DAY);
     }
 
     function getContractWorkHours() {
-        return contractWorkHours;
+        return state.contractWorkHours;
     }
 
     function getContractWorkHoursForRange(startDate, endDate) {
@@ -732,17 +644,17 @@
         return filterUI.initializeFilters();
     }
 
-    /** ?? ??? ??? */
+    /** Bind filter events */
     function setupFilterEvents() {
         return filterUI.setupFilterEvents();
     }
 
-    /** ?? ?? ??? ???? */
+    /** Update filter button label */
     function updateFilterBtnText(key) {
         return filterUI.updateFilterBtnText(key);
     }
 
-    /** ?? ??? ??? */
+    /** Destroy date pickers */
     function destroyDatePickers() {
         return filterUI.destroyDatePickers();
     }
@@ -751,31 +663,31 @@
         return filterUI.initializeDatePicker();
     }
 
-    /** ?? ?? */
+    /** Select all filter options */
     function filterSelectAll(key) {
         return filterUI.filterSelectAll(key);
     };
 
-    /** ?? ?? */
+    /** Deselect all filter options */
     function filterDeselectAll(key) {
         return filterUI.filterDeselectAll(key);
     };
 
-    /** ?? ?? ??? */
+    /** Clear all filters */
     function clearAllFilters() {
         return filterUI.clearAllFilters();
     };
 
     /* ============================================================
-       ?? ?? ? ??? ??? (?? pass)
+       Filter apply and filtered data refresh (module pass)
        ============================================================ */
 
-    /** ?? ??? ???? filteredData ?? */
+    /** Recompute filtered data from current filters */
     function applyAllFilters() {
         return filterUI.applyAllFilters();
     };
 
-    /** ?? ?? UI ???? */
+    /** Refresh filter summary UI */
     function updateFilterSummary(fromStr, toStr) {
         return filterUI.updateFilterSummary(fromStr, toStr);
     }
@@ -972,7 +884,7 @@
         return dashboardUI.upsertChart(id, config);
     }
 
-    function lineChartConfig(labels, datasets, yTitle = '??', xTitle = '??') {
+    function lineChartConfig(labels, datasets, yTitle = '\uAC12', xTitle = '\uAD6C\uBD84') {
         return dashboardUI.lineChartConfig(labels, datasets, yTitle, xTitle);
     }
 
@@ -997,7 +909,7 @@
     }
 
     /* ============================================================
-       TAB 2: ???? ?? (?? ???)
+       TAB 2: Engineer Analysis (module pass)
        ============================================================ */
     function updateEngineerTab() {
         return engineerTab.updateEngineerTab();
@@ -1057,17 +969,17 @@
         return tableUI.renderPagination(totalPages, currentPage);
     }
 
-    /** ??? ?? */
+    /** Go to table page */
     function goPage(p) {
         return tableUI.goPage(p);
     };
 
-    /** ?? ?? */
+    /** Toggle table sort */
     function sortTable(colIdx) {
         return tableUI.sortTable(colIdx);
     };
 
-    /** ?? ???? (?? ??? ???) */
+    /** Export detail table (current filtered rows) */
     function exportToExcel() {
         return tableUI.exportToExcel();
     };
@@ -1078,7 +990,6 @@
         return appShell.resetDashboard();
     }
 
-    let isDarkMode = false;
 
     appShell = window.DASH_APP_SHELL.createAppShell({
         Chart,
@@ -1086,27 +997,7 @@
         escapeAttr,
         formatNum,
         FILTER_COLUMNS,
-        state: {
-            getCharts: () => charts,
-            setCharts: (next) => { charts = next; },
-            getRawData: () => rawData,
-            setRawData: (next) => { rawData = next; },
-            setFilteredData: (next) => { filteredData = next; },
-            setCompensationEntries: (next) => { compensationEntries = next; },
-            getLoadedFiles: () => loadedFiles,
-            setLoadedFiles: (next) => { loadedFiles = next; },
-            getDrilldownState: () => drilldownState,
-            setDrilldownState: (next) => { drilldownState = next; },
-            getFilterState: () => filterState,
-            setActiveFilterFromDate: (next) => { activeFilterFromDate = next; },
-            setActiveFilterToDate: (next) => { activeFilterToDate = next; },
-            getCurrentTab: () => currentTab,
-            setCurrentTab: (next) => { currentTab = next; },
-            getIsDarkMode: () => isDarkMode,
-            setIsDarkMode: (next) => { isDarkMode = next; },
-            getComparisonMode: () => comparisonMode,
-            setComparisonMode: (next) => { comparisonMode = next; }
-        },
+        state: appState,
         actions: {
             applyAllFilters,
             clearAllFilters,
@@ -1119,6 +1010,7 @@
             updateComparisonModeControl,
             setupDropzone,
             initTableControls: () => tableUI.initTableControls(),
+            resetDetailTableState: () => tableUI.resetDetailTableState(),
             normalizeComparisonMode,
             handleFiles
         },

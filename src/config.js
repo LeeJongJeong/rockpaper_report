@@ -76,6 +76,19 @@
         '담당영업'
     ];
 
+    const TABLE_COLUMN_TYPES = {
+        '\uC791\uC5C5\uC2DC\uC791\uC77C\uC2DC': 'date',
+        '\uC791\uC5C5\uC885\uB8CC\uC77C\uC2DC': 'date',
+        '\uC791\uC5C5\uC2DC\uAC04(h)': 'number'
+    };
+
+    const COMPARISON_MODES = {
+        previous_period: { label: '\uC9C1\uC804 \uB3D9\uAE30\uAC04', description: '\uD604\uC7AC \uC120\uD0DD\uD55C \uAE30\uAC04\uACFC \uAE38\uC774\uAC00 \uAC19\uC740 \uBC14\uB85C \uC774\uC804 \uAD6C\uAC04\uACFC \uBE44\uAD50\uD569\uB2C8\uB2E4.' },
+        previous_week: { label: '\uC804\uC8FC \uB3D9\uC77C\uC694\uC77C', description: '\uD604\uC7AC \uAE30\uAC04\uC744 7\uC77C \uC55E\uB2F9\uAE34 \uB3D9\uC77C \uC694\uC77C \uAD6C\uAC04\uACFC \uBE44\uAD50\uD569\uB2C8\uB2E4.' },
+        previous_month: { label: '\uC804\uC6D4 \uB3D9\uC77C\uAE30\uAC04', description: '\uD604\uC7AC \uAE30\uAC04\uC744 \uD55C \uB2EC \uC55E\uB2F9\uAE34 \uB3D9\uC77C \uB2EC\uB825 \uAD6C\uAC04\uACFC \uBE44\uAD50\uD569\uB2C8\uB2E4.' },
+        previous_year: { label: '\uC804\uB144 \uB3D9\uAE30', description: '\uD604\uC7AC \uAE30\uAC04\uC744 1\uB144 \uC55E\uB2F9\uAE34 \uB3D9\uC77C \uB2EC\uB825 \uAD6C\uAC04\uACFC \uBE44\uAD50\uD569\uB2C8\uB2E4.' }
+    };
+
     const PRODUCT_GROUP_RULES = [
         // DB 계열
         { re: /MySQL.*(?:OCI|Azure|Cloud|RDS|GCP)/i, group: '클라우드 DB' },
@@ -119,6 +132,8 @@
         DEPT_COLORS,
         DEPT_BG_COLORS,
         TABLE_COLUMNS,
+        TABLE_COLUMN_TYPES,
+        COMPARISON_MODES,
         PRODUCT_GROUP_RULES
     };
 })();

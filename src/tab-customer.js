@@ -39,7 +39,6 @@
         const currentSummary = buildAnalyticsSummary(data, { range: compareContext.currentRange, custMap: custMap });
         const previousSummary = buildAnalyticsSummary(compareContext.previousData, { range: compareContext.previousRange, custMap: prevCustMap });
         const customerTransition = summarizeEntityTransition(currentSummary.customerSet, previousSummary.customerSet);
-        const multiProdCust = custEntries.filter(e => e[1].prods.size >= 2).length;
         const topCust = custEntries[0];
 
         document.getElementById('custKpiRow').innerHTML = `
@@ -48,7 +47,7 @@
                 <div class="kpi-mini"><div class="kpi-mini-label">신규 고객</div><div class="kpi-mini-value">${customerTransition.newCount}</div><div class="kpi-mini-sub">전체의 ${customerTransition.newRatio.toFixed(1)}%</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">단일엔지니어 의존</div><div class="kpi-mini-value">${currentSummary.singleEngineerCustomerRatio.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.singleEngineerCustomerRatio, previousSummary.singleEngineerCustomerRatio, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
                 <div class="kpi-mini"><div class="kpi-mini-label">Top3 고객 집중도</div><div class="kpi-mini-value">${currentSummary.top3CustomerShare.toFixed(1)}%</div><div class="kpi-mini-sub">${buildDeltaHtml(currentSummary.top3CustomerShare, previousSummary.top3CustomerShare, { decimals: 1, mode: 'pp', lowerIsBetter: true })}</div></div>
-                <div class="kpi-mini"><div class="kpi-mini-label">고객당 평균 엔지니어</div><div class="kpi-mini-value">${currentSummary.avgEngineersPerCustomer.toFixed(1)}</div><div class="kpi-mini-sub">멀티제품 고객 ${multiProdCust}곳 · 최다 ${safeInlineText(topCust[0])}</div></div>
+                <div class="kpi-mini"><div class="kpi-mini-label">최다지원고객</div><div class="kpi-mini-value">${safeInlineText(topCust[0])}</div><div class="kpi-mini-sub">지원 ${topCust[1].count}건 · ${topCust[1].hours.toFixed(1)}h</div></div>
             `;
 
         const topBubble = custEntries.slice(0, 20);
